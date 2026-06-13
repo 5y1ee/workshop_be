@@ -15,6 +15,23 @@ from app.models.user import User
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin1234"
+USER_USERNAME = "tester"
+USER_PASSWORD = "tester1234"
+
+
+async def _ensure_user(username: str, password: str, role: str) -> None:
+    async with AsyncSessionLocal() as db:
+        existing = await db.execute(select(User).where(User.username == username))
+        if existing.scalar_one_or_none() is None:
+            db.add(
+                User(
+                    username=username,
+                    password=hash_password(password),
+                    nickname=username,
+                    role=role,
+                )
+            )
+            await db.commit()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -38,16 +55,29 @@ async def client() -> AsyncClient:
 @pytest_asyncio.fixture
 async def seeded_admin() -> dict[str, str]:
     """admin 유저가 없으면 생성한다 (재실행 안전)."""
-    async with AsyncSessionLocal() as db:
-        existing = await db.execute(select(User).where(User.username == ADMIN_USERNAME))
-        if existing.scalar_one_or_none() is None:
-            db.add(
-                User(
-                    username=ADMIN_USERNAME,
-                    password=hash_password(ADMIN_PASSWORD),
-                    nickname="운영자",
-                    role="admin",
-                )
-            )
-            await db.commit()
+    await _ensure_user(ADMIN_USERNAME, ADMIN_PASSWORD, "admin")
     return {"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD}
+
+
+@pytest_asyncio.fixture
+async def seeded_user() -> dict[str, str]:
+    """일반(user) 권한 유저."""
+    await _ensure_user(USER_USERNAME, USER_PASSWORD, "user")
+    return {"username": USER_USERNAME, "password": USER_PASSWORD}
+
+
+async def _login_token(client: AsyncClient, creds: dict[str, str]) -> str:
+    res = await client.post("/api/auth/login", json=creds)
+    return res.json()["access_token"]
+
+
+@pytest_asyncio.fixture
+async def admin_headers(client: AsyncClient, seeded_admin) -> dict[str, str]:
+    token = await _login_token(client, seeded_admin)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def user_headers(client: AsyncClient, seeded_user) -> dict[str, str]:
+    token = await _login_token(client, seeded_user)
+    return {"Authorization": f"Bearer {token}"}
