@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, season, team, user
+from app.api import auth, game, season, team, timetable, user
 from app.core.config import settings
 from app.websocket import endpoint as ws_endpoint
 
@@ -35,6 +35,8 @@ def create_app() -> FastAPI:
     app.include_router(season.router, prefix="/api")
     app.include_router(team.router, prefix="/api")
     app.include_router(user.router, prefix="/api")
+    app.include_router(game.router, prefix="/api")
+    app.include_router(timetable.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_endpoint.router)
