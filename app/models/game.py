@@ -1,5 +1,5 @@
 from sqlalchemy import CheckConstraint, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -37,3 +37,6 @@ class Game(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    timetables: Mapped[list["Timetable"]] = relationship(back_populates="game")

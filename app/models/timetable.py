@@ -1,5 +1,5 @@
 from sqlalchemy import ForeignKey, String, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -35,3 +35,8 @@ class Timetable(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    season: Mapped["Season"] = relationship(back_populates="timetables")
+    game: Mapped["Game"] = relationship(back_populates="timetables")
+    sessions: Mapped[list["GameSession"]] = relationship(back_populates="timetable")

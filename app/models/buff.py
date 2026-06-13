@@ -9,7 +9,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -53,6 +53,14 @@ class Buff(Base, TimestampMixin):
         comment="최종 수정한 운영자",
     )
 
+    # --- relationships ---
+    envelopes: Mapped[list["Envelope"]] = relationship(
+        back_populates="buff", foreign_keys="Envelope.buff_id"
+    )
+    team_buffs: Mapped[list["TeamBuff"]] = relationship(
+        back_populates="buff", foreign_keys="TeamBuff.buff_id"
+    )
+
 
 class TeamBuff(Base, TimestampMixin):
     __tablename__ = "team_buffs"
@@ -94,3 +102,12 @@ class TeamBuff(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    team: Mapped["Team"] = relationship(
+        back_populates="team_buffs", foreign_keys=[team_id]
+    )
+    buff: Mapped["Buff"] = relationship(
+        back_populates="team_buffs", foreign_keys=[buff_id]
+    )
+    session: Mapped["GameSession"] = relationship(foreign_keys=[session_id])

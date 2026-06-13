@@ -8,7 +8,7 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -66,4 +66,15 @@ class Envelope(Base, TimestampMixin):
         ForeignKey("users.id", name="fk_envelopes_updated_by"),
         nullable=True,
         comment="최종 수정한 운영자",
+    )
+
+    # --- relationships ---
+    session: Mapped["GameSession"] = relationship(
+        back_populates="envelopes", foreign_keys=[session_id]
+    )
+    reward: Mapped["Reward | None"] = relationship(
+        back_populates="envelopes", foreign_keys=[reward_id]
+    )
+    buff: Mapped["Buff | None"] = relationship(
+        back_populates="envelopes", foreign_keys=[buff_id]
     )

@@ -1,5 +1,5 @@
 from sqlalchemy import CheckConstraint, ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin
 
@@ -41,4 +41,9 @@ class RaffleTicket(Base, CreatedAtMixin):
         ForeignKey("users.id", name="fk_raffle_tickets_created_by"),
         nullable=False,
         comment="기록한 운영자 또는 시스템",
+    )
+
+    # --- relationships ---
+    session: Mapped["GameSession | None"] = relationship(
+        back_populates="raffle_tickets"
     )

@@ -9,7 +9,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -40,6 +40,9 @@ class HiddenRole(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    assignments: Mapped[list["UserHiddenRole"]] = relationship(back_populates="role")
 
 
 class UserHiddenRole(Base, TimestampMixin):
@@ -83,3 +86,8 @@ class UserHiddenRole(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    season: Mapped["Season"] = relationship(back_populates="user_hidden_roles")
+    role: Mapped["HiddenRole"] = relationship(back_populates="assignments")
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])

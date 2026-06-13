@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -39,4 +39,12 @@ class Season(Base, TimestampMixin):
         ForeignKey("users.id", name="fk_seasons_updated"),
         nullable=True,
         comment="최종 수정한 운영자",
+    )
+
+    # --- relationships ---
+    teams: Mapped[list["Team"]] = relationship(back_populates="season")
+    timetables: Mapped[list["Timetable"]] = relationship(back_populates="season")
+    vote_ballots: Mapped[list["VoteBallot"]] = relationship(back_populates="season")
+    user_hidden_roles: Mapped[list["UserHiddenRole"]] = relationship(
+        back_populates="season"
     )

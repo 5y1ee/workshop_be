@@ -1,5 +1,5 @@
 from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -22,4 +22,9 @@ class Reward(Base, TimestampMixin):
         ForeignKey("users.id", name="fk_rewards_updated"),
         nullable=True,
         comment="최종 수정한 운영자",
+    )
+
+    # --- relationships ---
+    envelopes: Mapped[list["Envelope"]] = relationship(
+        back_populates="reward", foreign_keys="Envelope.reward_id"
     )

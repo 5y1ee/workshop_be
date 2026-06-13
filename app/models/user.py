@@ -1,5 +1,5 @@
 from sqlalchemy import CheckConstraint, ForeignKey, String, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -33,3 +33,9 @@ class User(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    team: Mapped["Team | None"] = relationship(
+        back_populates="members", foreign_keys=[team_id]
+    )
+    chat_logs: Mapped[list["GameChatLog"]] = relationship(back_populates="user")

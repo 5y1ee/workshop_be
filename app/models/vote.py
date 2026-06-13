@@ -9,7 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin, TimestampMixin
 
@@ -29,6 +29,9 @@ class VoteItem(Base, TimestampMixin):
         nullable=True,
         comment="최종 수정한 운영자",
     )
+
+    # --- relationships ---
+    ballots: Mapped[list["VoteBallot"]] = relationship(back_populates="vote_item")
 
 
 class VoteBallot(Base, TimestampMixin):
@@ -75,6 +78,11 @@ class VoteBallot(Base, TimestampMixin):
         comment="최종 수정한 운영자",
     )
 
+    # --- relationships ---
+    season: Mapped["Season"] = relationship(back_populates="vote_ballots")
+    vote_item: Mapped["VoteItem"] = relationship(back_populates="ballots")
+    records: Mapped[list["VoteRecord"]] = relationship(back_populates="ballot")
+
 
 class VoteRecord(Base, CreatedAtMixin):
     __tablename__ = "vote_records"
@@ -100,3 +108,6 @@ class VoteRecord(Base, CreatedAtMixin):
         nullable=False,
         comment="투표 대상 유저 ID",
     )
+
+    # --- relationships ---
+    ballot: Mapped["VoteBallot"] = relationship(back_populates="records")

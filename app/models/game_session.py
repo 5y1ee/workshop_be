@@ -8,7 +8,7 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin, TimestampMixin
 
@@ -47,6 +47,18 @@ class GameSession(Base, TimestampMixin):
         ForeignKey("users.id", name="fk_game_sessions_updated"),
         nullable=True,
         comment="상태 변경한 운영자",
+    )
+
+    # --- relationships ---
+    timetable: Mapped["Timetable"] = relationship(back_populates="sessions")
+    score_logs: Mapped[list["GameScoreLog"]] = relationship(back_populates="session")
+    results: Mapped[list["GameResult"]] = relationship(back_populates="session")
+    chat_logs: Mapped[list["GameChatLog"]] = relationship(back_populates="session")
+    envelopes: Mapped[list["Envelope"]] = relationship(
+        back_populates="session", foreign_keys="Envelope.session_id"
+    )
+    raffle_tickets: Mapped[list["RaffleTicket"]] = relationship(
+        back_populates="session"
     )
 
 
@@ -88,6 +100,9 @@ class GameScoreLog(Base, TimestampMixin):
         comment="점수 수정한 운영자",
     )
 
+    # --- relationships ---
+    session: Mapped["GameSession"] = relationship(back_populates="score_logs")
+
 
 class GameResult(Base, CreatedAtMixin):
     __tablename__ = "game_results"
@@ -110,6 +125,9 @@ class GameResult(Base, CreatedAtMixin):
     subject_id: Mapped[int] = mapped_column(
         nullable=False, comment="최종 승자 팀/유저 ID"
     )
+
+    # --- relationships ---
+    session: Mapped["GameSession"] = relationship(back_populates="results")
 
 
 class GameChatLog(Base):
@@ -135,3 +153,7 @@ class GameChatLog(Base):
     server_time: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, comment="서버 수신 타임스탬프 (클라이언트 시간 무시)"
     )
+
+    # --- relationships ---
+    session: Mapped["GameSession"] = relationship(back_populates="chat_logs")
+    user: Mapped["User"] = relationship(back_populates="chat_logs")
