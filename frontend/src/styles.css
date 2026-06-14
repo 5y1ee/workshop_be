@@ -54,6 +54,27 @@ body {
   margin: 4px 0;
 }
 
+/* ---------- 메인 ---------- */
+.main {
+  height: 100%;
+  background-image: url('/images/progress-bg.jpg');
+  background-size: cover;
+  background-position: center 0px;
+  position: relative;
+}
+
+.main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+  pointer-events: none;
+}
+
 /* ---------- 로그인 ---------- */
 .login {
   background-image: url('/images/login-bg.png');
@@ -393,6 +414,7 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
+  z-index: 1000;
 }
 .nav .tab {
   width: auto;
@@ -478,6 +500,31 @@ button:disabled {
 .rank-row .sc { font-weight: 800; color: var(--poke-blue); }
 
 /* 진행 루트 */
+/* ---------- 맵 체육관 마커 ---------- */
+.gym-marker {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.gym-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.gym-marker.done .gym-title { color: #a8f0c6; }
+.gym-marker.live .gym-title { color: #ffd76a; }
+
 .progress { font-size: 12px; font-weight: 700; margin-bottom: 12px; }
 .progress .bar { height: 8px; background: #eef1f6; border-radius: 999px; margin-top: 5px; overflow: hidden; }
 .progress .bar i { display: block; height: 100%; background: var(--poke-yellow); transition: width 0.4s; }

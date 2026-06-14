@@ -79,44 +79,38 @@ export default function MainPage() {
     )
   }
 
-  return (
-    <div className="page">
-      <div className="progress">
-        시즌 진행도 {doneCount} / {entries.length} 게임
-        <div className="bar">
-          <i style={{ width: entries.length ? `${(doneCount / entries.length) * 100}%` : '0%' }} />
-        </div>
-      </div>
+  // order_index 1(맨 아래) → 8(맨 위) 순서로 체육관 위치 정의
+  const GYM_POSITIONS: { x: string; y: string }[] = [
+    { x: '68%', y: '83%' }, // 1 - First Gym
+    { x: '22%', y: '79%' }, // 2 - Ice Mountain Gym
+    { x: '48%', y: '68%' }, // 3 - Forest Gym
+    { x: '73%', y: '58%' }, // 4 - Coastal Gym
+    { x: '22%', y: '50%' }, // 5 - Power Gym
+    { x: '68%', y: '40%' }, // 6 - Volcano Gym
+    { x: '25%', y: '28%' }, // 7 - Dojo Gym
+    { x: '68%', y: '16%' }, // 8 - Final Gym
+  ]
 
-      {entries.length === 0 ? (
-        <p className="muted">등록된 게임(타임테이블)이 없습니다.</p>
-      ) : (
-        <div className="route">
-          {entries.map((e) => {
-            const s = sessions[e.id]
-            const st = (s?.state as GameState) ?? null
-            const pill = st ? STATE_PILL[st] : { cls: 's-idle', label: '세션없음' }
-            const live = st === 'in_progress' || st === 'scoring' || st === 'reward'
-            const done = st === 'done'
-            return (
-              <div
-                key={e.id}
-                className={`stop${done ? ' done' : ''}${live ? ' live' : ''}`}
-                onClick={() => setSelected(e)}
-              >
-                <div className="dot">{done ? '✓' : live ? '⚡' : ''}</div>
-                <div className="game-card">
-                  <span className={`state-pill ${pill.cls}`}>{pill.label}</span>
-                  <div className="gname">
-                    {e.order_index}. {title(e)}
-                  </div>
-                  <div className="gmeta">탭하면 상세 · 점수/결과 히스토리</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+  return (
+    <div className="page main">
+      {entries.map((e) => {
+        const pos = GYM_POSITIONS[e.order_index - 1]
+        if (!pos) return null
+        const s = sessions[e.id]
+        const st = (s?.state as GameState) ?? null
+        const done = st === 'done'
+        const live = st === 'in_progress' || st === 'scoring' || st === 'reward'
+        return (
+          <div
+            key={e.id}
+            className={`gym-marker${done ? ' done' : ''}${live ? ' live' : ''}`}
+            style={{ left: pos.x, top: pos.y }}
+            onClick={() => setSelected(e)}
+          >
+            <span className="gym-title">{games[e.game_id]?.title ?? title(e)}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }
