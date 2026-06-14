@@ -47,6 +47,43 @@ export interface ScoreSummaryItem {
 
 export type GameState = 'idle' | 'ready' | 'in_progress' | 'scoring' | 'reward' | 'done'
 
+export interface TeamScore {
+  team_id: number
+  name: string
+  total_score: number
+}
+
+export interface TeamMember {
+  id: number
+  nickname: string
+  role: string
+  point: number
+  profile_image: string | null
+}
+
+export interface Reward {
+  id: number
+  name: string
+  description: string | null
+  total_count: number
+  image_url: string | null
+}
+
+export interface GameResult {
+  id: number
+  session_id: number
+  subject_type: string
+  subject_id: number
+}
+
+export interface Game {
+  id: number
+  title: string
+  description: string | null
+  participant_type: string
+  input_type: string
+}
+
 export interface RouletteSpinResult {
   session_id: number
   nonce: number
@@ -107,7 +144,20 @@ export const api = {
   scoreSummary: (token: string, sessionId: number) =>
     request<ScoreSummaryItem[]>(`/api/sessions/${sessionId}/scores/summary`, token),
 
+  // --- 포켓몬 UI 화면용 조회 ---
+  seasonScoreboard: (token: string, seasonId: number) =>
+    request<TeamScore[]>(`/api/seasons/${seasonId}/scoreboard`, token),
+  teamMembers: (token: string, teamId: number) =>
+    request<TeamMember[]>(`/api/teams/${teamId}/members`, token),
+  rewards: (token: string) => request<Reward[]>('/api/rewards', token),
+  results: (token: string, sessionId: number) =>
+    request<GameResult[]>(`/api/sessions/${sessionId}/results`, token),
+  games: (token: string) => request<Game[]>('/api/games', token),
+  game: (token: string, gameId: number) => request<Game>(`/api/games/${gameId}`, token),
+
   // --- 운영자(admin) 전용 쓰기 ---
+  createSession: (token: string, timetableId: number) =>
+    request<GameSession>(`/api/timetable/${timetableId}/session`, token, { method: 'POST' }),
   transition: (token: string, sessionId: number, to: GameState) =>
     request<GameSession>(`/api/sessions/${sessionId}/transition`, token, {
       method: 'POST',

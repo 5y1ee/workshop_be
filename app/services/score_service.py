@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.game_session import GameScoreLog
+from app.models.game_session import GameScoreLog, GameSession
 from app.models.team import Team
+from app.models.timetable import Timetable
 from app.models.user import User
 from app.schemas.score import ScoreCreate, ScoreUpdate
 
@@ -84,6 +85,44 @@ async def score_summary(db: AsyncSession, session_id: int) -> list[dict]:
         {
             "subject_type": row.subject_type,
             "subject_id": row.subject_id,
+            "total_score": int(row.total_score),
+        }
+        for row in result.all()
+    ]
+
+
+async def season_scoreboard(db: AsyncSession, season_id: int) -> list[dict]:
+    """시즌 전체 팀 누적 점수 (내림차순). 점수가 0인 팀도 포함한다.
+
+    game_score_logs → game_sessions → timetable 경로로 시즌에 속한 세션의
+    team 점수를 합산한다.
+    """
+    season_session_ids = (
+        select(GameSession.id)
+        .join(Timetable, GameSession.timetable_id == Timetable.id)
+        .where(Timetable.season_id == season_id)
+        .scalar_subquery()
+    )
+    total = func.coalesce(func.sum(GameScoreLog.score), 0)
+    result = await db.execute(
+        select(Team.id, Team.name, total.label("total_score"))
+        .select_from(Team)
+        .outerjoin(
+            GameScoreLog,
+            and_(
+                GameScoreLog.subject_type == "team",
+                GameScoreLog.subject_id == Team.id,
+                GameScoreLog.session_id.in_(season_session_ids),
+            ),
+        )
+        .where(Team.season_id == season_id)
+        .group_by(Team.id, Team.name)
+        .order_by(total.desc(), Team.id)
+    )
+    return [
+        {
+            "team_id": row.id,
+            "name": row.name,
             "total_score": int(row.total_score),
         }
         for row in result.all()

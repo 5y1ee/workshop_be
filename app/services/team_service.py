@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.team import Team
+from app.models.user import User
 from app.schemas.team import TeamCreate, TeamUpdate
 
 
@@ -32,3 +33,13 @@ async def update_team(db: AsyncSession, team: Team, data: TeamUpdate) -> Team:
     await db.commit()
     await db.refresh(team)
     return team
+
+
+async def list_members(db: AsyncSession, team_id: int) -> list[User]:
+    """팀 소속 유저 목록 (포인트 내림차순)."""
+    result = await db.execute(
+        select(User)
+        .where(User.team_id == team_id)
+        .order_by(User.point.desc(), User.id)
+    )
+    return list(result.scalars().all())
