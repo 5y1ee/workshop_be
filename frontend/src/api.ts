@@ -9,6 +9,16 @@ export interface LoginResponse {
   team_id: number | null
 }
 
+export interface UserProfile {
+  id: number
+  username: string
+  nickname: string
+  role: string
+  team_id: number | null
+  point: number
+  profile_image: string | null
+}
+
 export interface Season {
   id: number
   name: string
@@ -135,6 +145,7 @@ export const api = {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ username, password }).toString(),
     }),
+  me: (token: string) => request<UserProfile>('/api/auth/me', token),
   seasons: (token: string) => request<Season[]>('/api/seasons', token),
   timetable: (token: string, seasonId: number) =>
     request<TimetableEntry[]>(`/api/seasons/${seasonId}/timetable`, token),
@@ -183,4 +194,12 @@ export const api = {
 export function wsUrl(token: string): string {
   const base = API_BASE.replace(/^http/, 'ws')
   return `${base}/ws?token=${encodeURIComponent(token)}`
+}
+
+/** API/DB 에 저장된 상대 경로를 브라우저에서 쓸 수 있는 URL 로 변환한다. */
+export function resolveAssetUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  if (path.startsWith('/')) return `${API_BASE}${path}`
+  return `${API_BASE}/${path}`
 }

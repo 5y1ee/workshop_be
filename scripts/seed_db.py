@@ -8,7 +8,7 @@
     python -m scripts.seed_db seed               # 데모 데이터 삽입 (비어있을 때만)
     python -m scripts.seed_db reset-seed --yes   # 초기화 후 시드까지 한 번에
 
-기본 계정: admin / admin1234,  참가자 예시 로그인: trainer / trainer1234
+기본 계정: sangyoon / sangyoon1234 (관리자), 참가자 예시: sanghee / sanghee1234
 """
 
 from __future__ import annotations
@@ -32,6 +32,36 @@ from app.models.season import Season
 from app.models.team import Team
 from app.models.timetable import Timetable
 from app.models.user import User
+
+# (화면 이름, 로그인 ID, 포켓몬, 권한, 개인 포인트) — 팀은 목록 순서대로 6명씩 배치
+PARTICIPANTS: list[tuple[str, str, str, str, int]] = [
+    ("나상희", "sanghee", "찌리리공", "user", 40),
+    ("김현진", "hyunjin", "파이숭이", "user", 25),
+    ("이승민", "seungmin", "어니부기", "user", 15),
+    ("양준석", "junseok", "야돈", "user", 12),
+    ("임지호", "jiho", "근육몬", "user", 10),
+    ("정소희", "sohee", "모다피", "user", 8),
+    ("박민지", "minji", "마자용", "admin", 35),
+    ("이소민", "somin", "치코리타", "admin", 30),
+    ("이상윤", "sangyoon", "네이티오", "admin", 28),
+    ("신윤섭", "yunseop", "이상해씨", "user", 20),
+    ("황지선", "jiseon", "아르코", "user", 18),
+    ("유태영", "taeyoung", "파오리", "user", 14),
+    ("양수빈", "subin", "펭도리", "user", 22),
+    ("김소연", "soyeon", "꼬리선", "user", 20),
+    ("박재한", "jaehan", "고라파덕", "user", 16),
+    ("여민호", "minho", "슈륙챙이", "user", 12),
+    ("김민우", "minwoo", "잠만보", "user", 10),
+    ("장승연", "seungyeon", "에브이", "user", 8),
+]
+
+TEAM_NAMES = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀"]
+TEAM_SIZE = 6
+BOOTSTRAP_ADMIN = "sangyoon"
+
+
+def _profile_image(pokemon: str, nickname: str) -> str:
+    return f"/resources/{pokemon}_{nickname}.png"
 
 
 def _utcnow() -> datetime:
@@ -59,49 +89,47 @@ async def seed() -> None:
 
         now = _utcnow()
 
-        # --- 운영자 ---
+        # --- 시즌 생성자 (created_by 용) ---
+        bootstrap = next(p for p in PARTICIPANTS if p[1] == BOOTSTRAP_ADMIN)
+        bn, bu, bp, br, bpt = bootstrap
         admin = User(
-            username="admin",
-            password=hash_password("admin1234"),
-            nickname="운영자",
-            role="admin",
+            username=bu,
+            password=hash_password(f"{bu}1234"),
+            nickname=bn,
+            role=br,
+            point=bpt,
+            profile_image=_profile_image(bp, bn),
         )
         db.add(admin)
-        await db.flush()  # admin.id 확보 (created_by 용)
+        await db.flush()
 
         # --- 시즌 ---
         season = Season(name="가평 워크샵 2026", status="active", created_by=admin.id)
         db.add(season)
         await db.flush()
 
-        # --- 팀 4개 ---
-        team_names = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀", "🟡 옐로팀"]
-        teams = [Team(season_id=season.id, name=n) for n in team_names]
+        # --- 팀 3개 (6명씩) ---
+        teams = [Team(season_id=season.id, name=n) for n in TEAM_NAMES]
         db.add_all(teams)
         await db.flush()
 
-        # --- 참가자: 팀당 3명 (12명), 첫 명은 로그인 계정 trainer ---
-        nicknames = [
-            ["아론", "지나", "현우"],
-            ["민수", "서연", "도윤"],
-            ["하준", "수아", "지호"],
-            ["예준", "유나", "건우"],
-        ]
-        points = [[40, 25, 15], [30, 20, 10], [22, 18, 12], [16, 14, 9]]
-        for ti, team in enumerate(teams):
-            for ui, nick in enumerate(nicknames[ti]):
-                uname = "trainer" if (ti == 0 and ui == 0) else f"p{ti}{ui}"
-                pw = "trainer1234" if uname == "trainer" else "pw12345678"
-                db.add(
-                    User(
-                        username=uname,
-                        password=hash_password(pw),
-                        nickname=nick,
-                        role="user",
-                        team_id=team.id,
-                        point=points[ti][ui],
-                    )
+        # --- 참가자 18명 ---
+        for i, (nickname, username, pokemon, role, point) in enumerate(PARTICIPANTS):
+            team = teams[i // TEAM_SIZE]
+            if username == BOOTSTRAP_ADMIN:
+                admin.team_id = team.id
+                continue
+            db.add(
+                User(
+                    username=username,
+                    password=hash_password(f"{username}1234"),
+                    nickname=nickname,
+                    role=role,
+                    team_id=team.id,
+                    point=point,
+                    profile_image=_profile_image(pokemon, nickname),
                 )
+            )
 
         # --- 게임 5개 ---
         games_def = [
@@ -155,11 +183,11 @@ async def seed() -> None:
 
         # --- 점수/결과: 종료 2세션 + 진행중 1세션 ---
         # 종료 세션 0: 레드 35, 블루 20, 그린 10  → 레드 우승
-        # 종료 세션 1: 블루 30, 그린 25, 옐로 15  → 블루 우승
+        # 종료 세션 1: 블루 30, 그린 25, 레드 15  → 블루 우승
         # 진행중 세션 2: 레드 5, 블루 8 (집계 중)
         score_plan = [
             (0, [(teams[0], 35), (teams[1], 20), (teams[2], 10)], teams[0]),
-            (1, [(teams[1], 30), (teams[2], 25), (teams[3], 15)], teams[1]),
+            (1, [(teams[1], 30), (teams[2], 25), (teams[0], 15)], teams[1]),
             (2, [(teams[0], 5), (teams[1], 8)], None),
         ]
         for sidx, rows, winner in score_plan:
@@ -200,10 +228,11 @@ async def seed() -> None:
 
     print("✅ seed 완료")
     print("   - 시즌 '가평 워크샵 2026' (active)")
-    print("   - 팀 4 / 참가자 12 / 게임 5 / 타임테이블 5")
+    print("   - 팀 3 / 참가자 18 / 게임 5 / 타임테이블 5")
     print("   - 세션: 종료 2(점수+결과), 진행중 1, 대기 2")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
-    print("   - 로그인: admin/admin1234, trainer/trainer1234")
+    print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
+    print("   - 참가자 예시: sanghee/sanghee1234")
 
 
 def _require_yes(args, action: str) -> None:
