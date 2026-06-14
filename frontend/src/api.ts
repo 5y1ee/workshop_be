@@ -45,6 +45,17 @@ export interface ScoreSummaryItem {
   total_score: number
 }
 
+export type GameState = 'idle' | 'ready' | 'in_progress' | 'scoring' | 'reward' | 'done'
+
+export interface RouletteSpinResult {
+  session_id: number
+  nonce: number
+  options: string[]
+  selected_index: number
+  selected: string
+  commitment: string
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -95,6 +106,27 @@ export const api = {
     request<Team[]>(`/api/seasons/${seasonId}/teams`, token),
   scoreSummary: (token: string, sessionId: number) =>
     request<ScoreSummaryItem[]>(`/api/sessions/${sessionId}/scores/summary`, token),
+
+  // --- 운영자(admin) 전용 쓰기 ---
+  transition: (token: string, sessionId: number, to: GameState) =>
+    request<GameSession>(`/api/sessions/${sessionId}/transition`, token, {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+    }),
+  createScore: (
+    token: string,
+    sessionId: number,
+    body: { subject_type: 'team' | 'user'; subject_id: number; score: number; memo?: string },
+  ) =>
+    request<unknown>(`/api/sessions/${sessionId}/scores`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  rouletteSpin: (token: string, sessionId: number, options: string[], nonce: number) =>
+    request<RouletteSpinResult>(`/api/sessions/${sessionId}/roulette/spin`, token, {
+      method: 'POST',
+      body: JSON.stringify({ options, nonce }),
+    }),
 }
 
 export function wsUrl(token: string): string {

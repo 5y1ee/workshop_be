@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   api,
   type GameSession,
+  type GameState,
   type ScoreSummaryItem,
   type Season,
   type Team,
@@ -9,6 +10,7 @@ import {
 } from '../api'
 import { useAuth } from '../auth'
 import { useWebSocket, type WsEvent } from '../useWebSocket'
+import OperatorPanel from '../components/OperatorPanel'
 
 const LOG_LIMIT = 20
 
@@ -22,6 +24,7 @@ export default function ScoreboardPage() {
   const [entryId, setEntryId] = useState<number | null>(null)
   const [sessions, setSessions] = useState<GameSession[]>([])
   const [sessionId, setSessionId] = useState<number | null>(null)
+  const [sessionState, setSessionState] = useState<GameState | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [summary, setSummary] = useState<ScoreSummaryItem[]>([])
   const [log, setLog] = useState<string[]>([])
@@ -50,6 +53,16 @@ export default function ScoreboardPage() {
     setSessions([])
     api.sessions(t, entryId).then(setSessions).catch(() => setSessions([]))
   }, [t, entryId])
+
+  // 세션 선택 시 현재 상태 추적 시작
+  useEffect(() => {
+    if (sessionId == null) {
+      setSessionState(null)
+      return
+    }
+    const s = sessions.find((x) => x.id === sessionId)
+    if (s) setSessionState(s.state as GameState)
+  }, [sessionId, sessions])
 
   const refreshSummary = useCallback(() => {
     if (sessionId == null) {
@@ -84,6 +97,9 @@ export default function ScoreboardPage() {
           break
         case 'session_state_changed':
           pushLog(`상태 → ${e.state} (세션 #${sid})`)
+          if (sid === sessionId && typeof e.state === 'string') {
+            setSessionState(e.state as GameState)
+          }
           break
         case 'roulette_result':
           pushLog(`🎰 룰렛 → ${e.selected} (세션 #${sid})`)
@@ -165,6 +181,18 @@ export default function ScoreboardPage() {
             </li>
           ))}
         </ol>
+      )}
+
+      {user?.role === 'admin' && sessionId != null && sessionState != null && (
+        <OperatorPanel
+          key={sessionId}
+          token={t}
+          sessionId={sessionId}
+          state={sessionState}
+          teams={teams}
+          onStateChange={setSessionState}
+          onScored={refreshSummary}
+        />
       )}
 
       <h3 className="section">📡 실시간 이벤트</h3>

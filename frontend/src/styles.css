@@ -231,6 +231,63 @@ button:disabled {
   color: var(--primary);
 }
 
+/* ---------- 운영자 패널 ---------- */
+.op {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbfcff;
+}
+
+.op .section {
+  margin-top: 0;
+}
+
+.op-state {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.op-block {
+  margin-top: 14px;
+}
+
+.op-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.op-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.op-row select {
+  flex: 1;
+  min-width: 120px;
+}
+
+.op-score {
+  width: 80px;
+  flex: none;
+}
+
+.op-btn {
+  width: auto;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.op-result {
+  font-weight: 700;
+  color: var(--primary);
+}
+
 /* ---------- 이벤트 로그 ---------- */
 .log {
   list-style: none;
