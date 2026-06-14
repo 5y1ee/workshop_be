@@ -24,11 +24,6 @@ export default function LoginPage() {
 
   return (
     <div className="page login">
-      <div className="brand">
-        <div className="logo">🏕️</div>
-        <h1>Workshop</h1>
-        <p className="muted">가평 워크샵</p>
-      </div>
       <form onSubmit={submit} className="card">
         <label>
           아이디

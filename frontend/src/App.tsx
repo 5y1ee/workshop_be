@@ -8,13 +8,13 @@ export default function App() {
   const { token } = useAuth()
   if (!token) {
     return (
-      <div className="phone">
+      <div className="container">
         <LoginPage />
       </div>
     )
   }
   return (
-    <div className="phone">
+    <div className="container">
       <LiveProvider>
         <SeasonProvider>
           <AppShell />
