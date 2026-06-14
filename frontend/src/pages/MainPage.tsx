@@ -64,7 +64,7 @@ export default function MainPage() {
   }, [lastEvent, loadEntries])
 
   const title = (e: TimetableEntry) => e.label ?? games[e.game_id]?.title ?? `게임 #${e.game_id}`
-  const doneCount = Object.values(sessions).filter((s) => s?.state === 'done').length
+  // const doneCount = Object.values(sessions).filter((s) => s?.state === 'done').length
 
   if (selected) {
     return (
@@ -81,14 +81,14 @@ export default function MainPage() {
 
   // order_index 1(맨 아래) → 8(맨 위) 순서로 체육관 위치 정의
   const GYM_POSITIONS: { x: string; y: string }[] = [
-    { x: '68%', y: '83%' }, // 1 - First Gym
-    { x: '22%', y: '79%' }, // 2 - Ice Mountain Gym
-    { x: '48%', y: '68%' }, // 3 - Forest Gym
-    { x: '73%', y: '58%' }, // 4 - Coastal Gym
-    { x: '22%', y: '50%' }, // 5 - Power Gym
-    { x: '68%', y: '40%' }, // 6 - Volcano Gym
-    { x: '25%', y: '28%' }, // 7 - Dojo Gym
-    { x: '68%', y: '16%' }, // 8 - Final Gym
+    { x: '75%', y: '95%' }, // 1 - First Gym
+    { x: '22%', y: '86%' }, // 2 - Ice Mountain Gym
+    { x: '56%', y: '75%' }, // 3 - Forest Gym
+    { x: '80%', y: '64%' }, // 4 - Coastal Gym
+    { x: '30%', y: '54%' }, // 5 - Power Gym
+    { x: '78%', y: '46%' }, // 6 - Volcano Gym
+    { x: '30%', y: '35%' }, // 7 - Dojo Gym
+    { x: '76%', y: '26%' }, // 8 - Final Gym
   ]
 
   return (
