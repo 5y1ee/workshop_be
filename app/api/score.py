@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import AdminUser, CurrentUser, DbSession
-from app.schemas.score import ScoreCreate, ScoreRead, ScoreSummaryItem, ScoreUpdate
+from app.schemas.score import (
+    ScoreCreate,
+    ScoreRead,
+    ScoreSummaryItem,
+    ScoreUpdate,
+    TeamScoreboardItem,
+)
 from app.services import game_session_service, score_service
 from app.websocket.events import broadcast_score_recorded
 
@@ -53,6 +59,17 @@ async def score_summary(
     session_id: int, db: DbSession, user: CurrentUser
 ) -> list[ScoreSummaryItem]:
     return await score_service.score_summary(db, session_id)
+
+
+@router.get(
+    "/seasons/{season_id}/scoreboard",
+    response_model=list[TeamScoreboardItem],
+)
+async def season_scoreboard(
+    season_id: int, db: DbSession, user: CurrentUser
+) -> list[TeamScoreboardItem]:
+    """시즌 전체 팀 누적 점수 랭킹 (점수 0 팀 포함, 내림차순)."""
+    return await score_service.season_scoreboard(db, season_id)
 
 
 @router.patch("/scores/{score_id}", response_model=ScoreRead)

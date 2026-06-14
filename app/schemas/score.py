@@ -36,3 +36,9 @@ class ScoreSummaryItem(BaseModel):
     subject_type: str
     subject_id: int
     total_score: int
+
+
+class TeamScoreboardItem(BaseModel):
+    team_id: int
+    name: str
+    total_score: int

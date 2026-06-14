@@ -18,3 +18,13 @@ class TeamRead(BaseModel):
     season_id: int
     name: str
     created_at: datetime
+
+
+class TeamMember(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nickname: str
+    role: str
+    point: int
+    profile_image: str | None

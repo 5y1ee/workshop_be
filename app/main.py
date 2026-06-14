@@ -8,6 +8,7 @@ from app.api import (
     game,
     game_session,
     result,
+    reward,
     roulette,
     score,
     season,
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(game_session.router, prefix="/api")
     app.include_router(score.router, prefix="/api")
     app.include_router(result.router, prefix="/api")
+    app.include_router(reward.router, prefix="/api")
     app.include_router(roulette.router, prefix="/api")
 
     # WebSocket

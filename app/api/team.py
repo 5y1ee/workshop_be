@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import AdminUser, CurrentUser, DbSession
-from app.schemas.team import TeamCreate, TeamRead, TeamUpdate
+from app.schemas.team import TeamCreate, TeamMember, TeamRead, TeamUpdate
 from app.services import season_service, team_service
 
 router = APIRouter(tags=["teams"])
@@ -41,6 +41,15 @@ async def list_teams(
 @router.get("/teams/{team_id}", response_model=TeamRead)
 async def get_team(team_id: int, db: DbSession, user: CurrentUser) -> TeamRead:
     return await _get_team_or_404(db, team_id)
+
+
+@router.get("/teams/{team_id}/members", response_model=list[TeamMember])
+async def list_team_members(
+    team_id: int, db: DbSession, user: CurrentUser
+) -> list[TeamMember]:
+    """팀 소속 멤버 목록 (로그인 유저 누구나 조회 가능, 포인트 내림차순)."""
+    await _get_team_or_404(db, team_id)
+    return await team_service.list_members(db, team_id)
 
 
 @router.patch("/teams/{team_id}", response_model=TeamRead)
