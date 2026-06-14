@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type TeamMember, type TeamScore } from '../api'
+import { api, resolveAssetUrl, type TeamMember, type TeamScore, type UserProfile } from '../api'
 import { useAuth } from '../auth'
 import { useSeason } from '../season'
 import { useLive } from '../live'
@@ -12,9 +12,15 @@ export default function MyPage() {
 
   const [teamName, setTeamName] = useState<string | null>(null)
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [scoreboard, setScoreboard] = useState<TeamScore[]>([])
 
   const teamId = user?.team_id ?? null
+
+  // 내 프로필 (profile_image 포함)
+  useEffect(() => {
+    api.me(t).then(setProfile).catch(() => setProfile(null))
+  }, [t])
 
   // 팀원
   useEffect(() => {
@@ -44,13 +50,20 @@ export default function MyPage() {
 
   const myRankIdx = scoreboard.findIndex((s) => s.team_id === teamId)
   const myTeamScore = myRankIdx >= 0 ? scoreboard[myRankIdx].total_score : 0
-  const myPoint = members.find((m) => m.id === user?.user_id)?.point ?? 0
+  const me = members.find((m) => m.id === user?.user_id)
+  const myPoint = me?.point ?? profile?.point ?? 0
+  const myProfileImage = profile?.profile_image ?? me?.profile_image ?? null
 
   return (
     <div className="page">
       <div className="trainer">
         <div className="flex">
-          <div className="avatar">🧑</div>
+          <ProfileFace
+            className="avatar"
+            profileImage={myProfileImage}
+            fallback={user?.role === 'admin' ? '🧑‍✈️' : '🧑'}
+            alt={user?.nickname ?? '프로필'}
+          />
           <div>
             <div className="t-name">{user?.nickname}</div>
             <span className="pill team">
@@ -88,7 +101,12 @@ export default function MyPage() {
             <div className="party">
               {members.map((m) => (
                 <div key={m.id} className={`slot${m.id === user?.user_id ? ' me' : ''}`}>
-                  <div className="face">{m.role === 'admin' ? '🧑‍✈️' : '🧑'}</div>
+                  <ProfileFace
+                    className="face"
+                    profileImage={m.profile_image}
+                    fallback={m.role === 'admin' ? '🧑‍✈️' : '🧑'}
+                    alt={m.nickname}
+                  />
                   {m.nickname}
                   <br />
                   <b>{m.point}</b>
@@ -100,4 +118,26 @@ export default function MyPage() {
       )}
     </div>
   )
+}
+
+function ProfileFace({
+  className,
+  profileImage,
+  fallback,
+  alt,
+}: {
+  className: string
+  profileImage: string | null
+  fallback: string
+  alt: string
+}) {
+  const src = resolveAssetUrl(profileImage)
+  if (src) {
+    return (
+      <div className={className}>
+        <img src={src} alt={alt} />
+      </div>
+    )
+  }
+  return <div className={className}>{fallback}</div>
 }

@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api import (
     auth,
@@ -57,6 +59,9 @@ def create_app() -> FastAPI:
 
     # WebSocket
     app.include_router(ws_endpoint.router)
+
+    resources_dir = Path(__file__).resolve().parent.parent / "resources"
+    app.mount("/resources", StaticFiles(directory=resources_dir), name="resources")
 
     @app.get("/health")
     async def health() -> dict[str, str]:
