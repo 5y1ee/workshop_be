@@ -31,6 +31,8 @@ app/
 
 ## 실행
 
+**Python 3.10 이상** 필요 (권장: 3.12). `pyenv`/`asdf` 사용 시 `.python-version` 참고.
+
 ### 1. 가상환경 + 의존성 설치
 
 ```bash
