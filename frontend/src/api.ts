@@ -106,6 +106,29 @@ export interface Game {
   input_type: string
 }
 
+export type RoundStatus = 'waiting' | 'open' | 'closed'
+
+export interface GameRound {
+  id: number
+  session_id: number
+  order_index: number
+  status: RoundStatus
+  prompt: string | null
+  media_url: string | null
+  options: string[] | null
+  opened_at: string | null
+  closed_at: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+export interface RoundReveal {
+  round_id: number
+  correct_answer: string | null
+  total_submissions: number
+  distribution: Record<string, number>
+}
+
 export interface RouletteSpinResult {
   session_id: number
   nonce: number
@@ -233,6 +256,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ options, nonce }),
     }),
+
+  // --- 게임 라운드(세션 내부 진행도) ---
+  rounds: (token: string, sessionId: number) =>
+    request<GameRound[]>(`/api/sessions/${sessionId}/rounds`, token),
+  currentRound: (token: string, sessionId: number) =>
+    request<GameRound>(`/api/sessions/${sessionId}/rounds/current`, token),
+  createRound: (
+    token: string,
+    sessionId: number,
+    body: {
+      order_index: number
+      prompt?: string | null
+      media_url?: string | null
+      options?: string[] | null
+      correct_answer?: string | null
+    },
+  ) =>
+    request<GameRound>(`/api/sessions/${sessionId}/rounds`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  openRound: (token: string, roundId: number) =>
+    request<GameRound>(`/api/rounds/${roundId}/open`, token, { method: 'POST' }),
+  closeRound: (token: string, roundId: number) =>
+    request<RoundReveal>(`/api/rounds/${roundId}/close`, token, { method: 'POST' }),
+  revealRound: (token: string, roundId: number) =>
+    request<RoundReveal>(`/api/rounds/${roundId}/reveal`, token),
 
   // --- 운영자(admin) 관리: 시즌 / 팀 / 유저 ---
   createSeason: (token: string, name: string) =>

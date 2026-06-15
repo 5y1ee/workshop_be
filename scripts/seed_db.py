@@ -26,6 +26,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
 from app.models.game import Game
+from app.models.game_round import GameRound
 from app.models.game_session import GameResult, GameScoreLog, GameSession
 from app.models.reward import Reward
 from app.models.season import Season
@@ -170,13 +171,15 @@ async def seed() -> None:
         db.add_all(entries)
         await db.flush()
 
-        # --- 세션: 2개 종료(점수+결과), 1개 진행중, 2개 대기 ---
+        # --- 세션 상태 ---
+        #  idx 0: 종료(점수+결과)  | idx 1: button 진행중  | idx 2: chat 진행중  | 나머지 대기
+        in_progress_idx = {1, 2}
         sessions = []
         for idx, entry in enumerate(entries):
-            if idx < 2:
+            if idx == 0:
                 state, seed_v = "done", secrets.token_hex(16)
-                started, ended = now - timedelta(hours=2 - idx), now - timedelta(hours=1)
-            elif idx == 2:
+                started, ended = now - timedelta(hours=2), now - timedelta(hours=1)
+            elif idx in in_progress_idx:
                 state, seed_v = "in_progress", secrets.token_hex(16)
                 started, ended = now - timedelta(minutes=10), None
             else:
@@ -192,14 +195,47 @@ async def seed() -> None:
         db.add_all(sessions)
         await db.flush()
 
-        # --- 점수/결과: 종료 2세션 + 진행중 1세션 ---
+        # --- 라운드(세션 내부 진행도): 진행중 button/chat 세션에 문제 4개씩, 1번 문제 open ---
+        # idx 1 = 퀴즈 대결(button), idx 2 = 노래 맞추기(chat)
+        button_rounds = [
+            ("대한민국의 수도는?", ["서울", "부산", "인천", "대전"], "서울"),
+            ("물의 화학식은?", ["CO2", "H2O", "O2", "NaCl"], "H2O"),
+            ("무지개는 몇 가지 색?", ["5", "6", "7", "8"], "7"),
+            ("태양계에서 가장 큰 행성은?", ["지구", "토성", "목성", "화성"], "목성"),
+        ]
+        chat_rounds = [
+            ("이 노래 제목은? 🎵 (힌트: BTS, 봄을 노래)", "봄날"),
+            ("이 노래 제목은? 🎵 (힌트: 아이유, 잔잔한 밤)", "밤편지"),
+            ("이 노래 제목은? 🎵 (힌트: 버스커버스커, 봄 대표곡)", "벚꽃엔딩"),
+            ("이 노래 제목은? 🎵 (힌트: 잔나비)", "주저하는 연인들을 위해"),
+        ]
+
+        def _round(session_id, order, prompt, options, answer):
+            opened = order == 1  # 1번 문제만 열어둔 상태로 시드
+            return GameRound(
+                session_id=session_id,
+                order_index=order,
+                status="open" if opened else "waiting",
+                prompt=prompt,
+                options=options,
+                correct_answer=answer,
+                opened_at=now if opened else None,
+                created_by=admin.id,
+            )
+
+        for i, (prompt, options, answer) in enumerate(button_rounds, start=1):
+            db.add(_round(sessions[1].id, i, prompt, options, answer))
+        for i, (prompt, answer) in enumerate(chat_rounds, start=1):
+            db.add(_round(sessions[2].id, i, prompt, None, answer))
+
+        # --- 점수/결과 ---
         # 종료 세션 0: 레드 35, 블루 20, 그린 10  → 레드 우승
-        # 종료 세션 1: 블루 30, 그린 25, 레드 15  → 블루 우승
-        # 진행중 세션 2: 레드 5, 블루 8 (집계 중)
+        # 진행중 세션 1(button): 레드 10, 블루 5 (집계 중)
+        # 진행중 세션 2(chat):   블루 8, 그린 4 (집계 중)
         score_plan = [
             (0, [(teams[0], 35), (teams[1], 20), (teams[2], 10)], teams[0]),
-            (1, [(teams[1], 30), (teams[2], 25), (teams[0], 15)], teams[1]),
-            (2, [(teams[0], 5), (teams[1], 8)], None),
+            (1, [(teams[0], 10), (teams[1], 5)], None),
+            (2, [(teams[1], 8), (teams[2], 4)], None),
         ]
         for sidx, rows, winner in score_plan:
             for team, sc in rows:
@@ -246,7 +282,8 @@ async def seed() -> None:
     print("✅ seed 완료")
     print("   - 시즌 '가평 워크샵 2026' (active)")
     print("   - 팀 3 / 참가자 18 / 게임 8 / 타임테이블 8")
-    print("   - 세션: 종료 2(점수+결과), 진행중 1, 대기 5")
+    print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 5")
+    print("   - 라운드: 퀴즈대결(button)·노래맞추기(chat) 각 4문제, 1번 문제 open")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
     print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
     print("   - 참가자 예시: sanghee/sanghee1234")

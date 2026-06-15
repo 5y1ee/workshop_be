@@ -3,6 +3,7 @@ import {
   api,
   type Game,
   type GameResult,
+  type GameRound,
   type GameSession,
   type GameState,
   type ScoreSummaryItem,
@@ -12,6 +13,9 @@ import {
 import { useAuth } from '../auth'
 import { useLive } from '../live'
 import OperatorPanel from '../components/OperatorPanel'
+import RoundOperator from '../components/RoundOperator'
+import ChatPanel from '../components/ChatPanel'
+import ButtonPanel from '../components/ButtonPanel'
 
 interface Props {
   entry: TimetableEntry
@@ -41,7 +45,7 @@ export default function GameDetail({
 }: Props) {
   const { token, user } = useAuth()
   const t = token as string
-  const { lastEvent } = useLive()
+  const { lastEvent, send, connected } = useLive()
   const isAdmin = user?.role === 'admin'
 
   const [sessionId, setSessionId] = useState<number | null>(session?.id ?? null)
@@ -49,7 +53,13 @@ export default function GameDetail({
   const [summary, setSummary] = useState<ScoreSummaryItem[]>([])
   const [results, setResults] = useState<GameResult[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [rounds, setRounds] = useState<GameRound[]>([])
   const [busy, setBusy] = useState(false)
+
+  const inputType = game?.input_type ?? ''
+  const isChat = inputType === 'chat'
+  const isButton = inputType === 'button' || inputType === 'vote'
+  const currentRound = rounds.find((r) => r.status === 'open') ?? null
 
   useEffect(() => {
     api.teams(t, seasonId).then(setTeams).catch(() => setTeams([]))
@@ -63,17 +73,39 @@ export default function GameDetail({
     if (sessionId == null) {
       setSummary([])
       setResults([])
+      setRounds([])
       return
     }
     api.scoreSummary(t, sessionId).then(setSummary).catch(() => setSummary([]))
     api.results(t, sessionId).then(setResults).catch(() => setResults([]))
+    api.rounds(t, sessionId).then(setRounds).catch(() => setRounds([]))
   }, [t, sessionId])
 
   useEffect(refresh, [refresh])
+
+  // 구조가 바뀌는 이벤트에서만 갱신 (채팅/제출 카운트 같은 고빈도 이벤트는 제외)
   useEffect(() => {
     const sid = lastEvent?.session_id as number | undefined
-    if (sid === sessionId) refresh()
+    const structural = [
+      'round_started',
+      'round_revealed',
+      'session_state_changed',
+      'score_recorded',
+      'result_recorded',
+    ]
+    if (sid === sessionId && lastEvent && structural.includes(lastEvent.type)) {
+      refresh()
+    }
   }, [lastEvent, sessionId, refresh])
+
+  // 게임 상세 진입 = 해당 세션 실시간 방에 합류
+  useEffect(() => {
+    if (sessionId == null || !connected) return
+    send({ type: 'join_session', session_id: sessionId })
+    return () => {
+      send({ type: 'leave_session', session_id: sessionId })
+    }
+  }, [sessionId, connected, send])
 
   const createSession = async () => {
     setBusy(true)
@@ -104,6 +136,13 @@ export default function GameDetail({
           </span>
         )}
         {state && <span className="chip state">{STATE_LABEL[state]}</span>}
+        {rounds.length > 0 && (
+          <span className="chip">
+            문제 {currentRound?.order_index ?? rounds.filter((r) => r.status === 'closed').length}
+            {' / '}
+            {rounds.length}
+          </span>
+        )}
       </div>
 
       {sessionId == null ? (
@@ -117,6 +156,16 @@ export default function GameDetail({
         </div>
       ) : (
         <>
+          {/* input_type 별 참가자 진행 화면 */}
+          {isChat && (
+            <ChatPanel
+              sessionId={sessionId}
+              myUserId={user?.user_id ?? -1}
+              round={currentRound}
+            />
+          )}
+          {isButton && <ButtonPanel sessionId={sessionId} round={currentRound} />}
+
           <h3 className="sec-title">🏆 스코어보드</h3>
           {summary.length === 0 ? (
             <p className="muted">아직 기록된 점수가 없습니다.</p>
@@ -141,6 +190,17 @@ export default function GameDetail({
                 ))}
               </div>
             </>
+          )}
+
+          {isAdmin && (isChat || isButton) && (
+            <RoundOperator
+              key={`ro-${sessionId}`}
+              token={t}
+              sessionId={sessionId}
+              rounds={rounds}
+              inputType={inputType}
+              onChanged={refresh}
+            />
           )}
 
           {isAdmin && state && (
