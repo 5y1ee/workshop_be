@@ -1,4 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   api,
   ApiError,
@@ -20,6 +35,32 @@ const STATUS_LABEL: Record<string, string> = {
   preparing: '준비중',
   active: '진행중',
   done: '종료',
+}
+
+/** 드래그로 순서를 바꿀 수 있는 타임테이블 한 줄. */
+function SortableEntryRow({ id, order, title }: { id: number; order: number; title: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="admin-row">
+      <button
+        className="mini-btn ghost"
+        style={{ cursor: 'grab', touchAction: 'none', padding: '0 8px' }}
+        aria-label="드래그해 순서 변경"
+        {...attributes}
+        {...listeners}
+      >
+        ⠿
+      </button>
+      <span className="row-main">
+        <b>{order}. {title}</b>
+      </span>
+    </div>
+  )
 }
 
 export default function AdminPage({ onClose }: Props) {
@@ -170,6 +211,10 @@ export default function AdminPage({ onClose }: Props) {
   const [entries, setEntries] = useState<TimetableEntry[]>([])
   const [games, setGames] = useState<Game[]>([])
   const [pickGame, setPickGame] = useState('')
+  // 클릭(작은 움직임)은 드래그로 오인하지 않도록 8px 이동 후 드래그 시작
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  )
 
   const loadEntries = useCallback(() => {
     if (seasonId == null) {
@@ -182,6 +227,7 @@ export default function AdminPage({ onClose }: Props) {
   useEffect(() => {
     api.games(t).then(setGames).catch(() => setGames([]))
   }, [t])
+  const sortedEntries = entries.slice().sort((a, b) => a.order_index - b.order_index)
 
   const addEntry = () =>
     run(async () => {
@@ -191,11 +237,37 @@ export default function AdminPage({ onClose }: Props) {
       await api.createTimetable(t, seasonId, {
         game_id: Number(pickGame),
         order_index: entries.length + 1,
-        label: game ? `${entries.length + 1}. ${game.title}` : null,
+        label: game ? game.title : null,
       })
       setPickGame('')
       loadEntries()
     })
+
+  // 드래그로 배열 순서를 바꾼 뒤 order_index 를 1..N 으로 다시 매겨 저장한다.
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const sorted = entries.slice().sort((a, b) => a.order_index - b.order_index)
+    const from = sorted.findIndex((e) => e.id === active.id)
+    const to = sorted.findIndex((e) => e.id === over.id)
+    if (from === -1 || to === -1) return
+
+    const moved = arrayMove(sorted, from, to)
+    // 낙관적 업데이트: 화면을 먼저 새 순서로 갱신
+    const reindexed = moved.map((e, i) => ({ ...e, order_index: i + 1 }))
+    setEntries(reindexed)
+
+    run(async () => {
+      // order_index 가 실제로 바뀐 항목만 저장
+      const changed = reindexed.filter(
+        (e) => sorted.find((s) => s.id === e.id)!.order_index !== e.order_index,
+      )
+      await Promise.all(
+        changed.map((e) => api.updateTimetable(t, e.id, { order_index: e.order_index })),
+      )
+      loadEntries()
+    })
+  }
 
   // ---------- 리워드 도감 ----------
   const [rewards, setRewards] = useState<Reward[]>([])
@@ -409,22 +481,34 @@ export default function AdminPage({ onClose }: Props) {
               추가
             </button>
           </div>
-          <div className="admin-list">
-            {entries.length === 0 ? (
+          {entries.length === 0 ? (
+            <div className="admin-list">
               <p className="muted">등록된 게임이 없습니다.</p>
-            ) : (
-              entries
-                .slice()
-                .sort((a, b) => a.order_index - b.order_index)
-                .map((en) => (
-                  <div key={en.id} className="admin-row">
-                    <span className="row-main">
-                      <b>{en.order_index}. {en.label ?? gameTitle(en.game_id)}</b>
-                    </span>
+            </div>
+          ) : (
+            <>
+              <p className="muted" style={{ margin: '0 0 6px' }}>
+                ⠿ 핸들을 잡고 드래그해 진행 순서를 바꿀 수 있어요.
+              </p>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext
+                  items={sortedEntries.map((en) => en.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="admin-list">
+                    {sortedEntries.map((en) => (
+                      <SortableEntryRow
+                        key={en.id}
+                        id={en.id}
+                        order={en.order_index}
+                        title={en.label ?? gameTitle(en.game_id)}
+                      />
+                    ))}
                   </div>
-                ))
-            )}
-          </div>
+                </SortableContext>
+              </DndContext>
+            </>
+          )}
 
           {/* ⑤ 리워드 도감 */}
           <h3 className="sec-title">⑤ 리워드 도감</h3>

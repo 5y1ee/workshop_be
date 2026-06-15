@@ -201,6 +201,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  updateTimetable: (
+    token: string,
+    entryId: number,
+    body: { game_id?: number; order_index?: number; phase?: string | null; label?: string | null; raffle_reward?: number },
+  ) =>
+    request<TimetableEntry>(`/api/timetable/${entryId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
 
   // --- 운영자(admin) 전용 쓰기 ---
   createSession: (token: string, timetableId: number) =>
