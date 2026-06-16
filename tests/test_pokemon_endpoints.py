@@ -48,24 +48,38 @@ async def _create_user(client, admin_headers, nickname="참가자"):
     ).json()["id"]
 
 
-async def _session_for_season(client, admin_headers, season_id):
+async def _session_for_season(
+    client, admin_headers, season_id, participant_type="team_vs", order_index=1
+):
     game_id = (
         await client.post(
             "/api/games",
-            json={"title": _unique("게임"), "participant_type": "team_vs", "input_type": "button"},
+            json={
+                "title": _unique("게임"),
+                "participant_type": participant_type,
+                "input_type": "button",
+            },
             headers=admin_headers,
         )
     ).json()["id"]
     timetable_id = (
         await client.post(
             f"/api/seasons/{season_id}/timetable",
-            json={"game_id": game_id, "order_index": 1},
+            json={"game_id": game_id, "order_index": order_index},
             headers=admin_headers,
         )
     ).json()["id"]
-    return (
+    session_id = (
         await client.post(f"/api/timetable/{timetable_id}/session", headers=admin_headers)
     ).json()["id"]
+    # 점수 기록이 가능하도록 in_progress 까지 전이
+    for to in ("ready", "in_progress"):
+        await client.post(
+            f"/api/sessions/{session_id}/transition",
+            json={"to": to},
+            headers=admin_headers,
+        )
+    return session_id
 
 
 # ----- 시즌 스코어보드 -----
@@ -138,6 +152,75 @@ async def test_season_user_scoreboard_aggregates_and_sorts(client, admin_headers
     board = res.json()
     assert board[0] == {"user_id": user_a, "name": "개인A", "total_score": 15}
     assert board[1] == {"user_id": user_b, "name": "개인B", "total_score": 0}
+
+
+async def test_team_scoreboard_rolls_member_individual_scores(client, admin_headers):
+    # 팀 대항전(team_vs): 팀 직접 점수 + 멤버 개인 점수가 모두 팀 총점에 합산된다.
+    season_id, red_id, blue_id = await _season_with_two_teams(client, admin_headers)
+    user_a = await _create_user(client, admin_headers, nickname="개인A")
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_a},
+        headers=admin_headers,
+    )
+    session_id = await _session_for_season(client, admin_headers, season_id)
+
+    # 레드팀 직접 6점 + 레드팀 소속 개인 4점 → 레드팀 10점
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "team", "subject_id": red_id, "score": 6},
+        headers=admin_headers,
+    )
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_a, "score": 4},
+        headers=admin_headers,
+    )
+
+    res = await client.get(f"/api/seasons/{season_id}/scoreboard", headers=admin_headers)
+    board = {b["team_id"]: b["total_score"] for b in res.json()}
+    assert board[red_id] == 10
+    assert board[blue_id] == 0
+
+
+async def test_individual_game_scores_excluded_from_team_scoreboard(client, admin_headers):
+    # 개인전(individual): 개인 점수는 팀 총점에 합산되지 않고 개인 랭킹에만 반영된다.
+    season_id, red_id, blue_id = await _season_with_two_teams(client, admin_headers)
+    user_a = await _create_user(client, admin_headers, nickname="개인A")
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_a},
+        headers=admin_headers,
+    )
+    session_id = await _session_for_season(
+        client, admin_headers, season_id, participant_type="individual"
+    )
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_a, "score": 9},
+        headers=admin_headers,
+    )
+
+    # 팀 스코어보드에는 반영되지 않음
+    team_board = {
+        b["team_id"]: b["total_score"]
+        for b in (
+            await client.get(f"/api/seasons/{season_id}/scoreboard", headers=admin_headers)
+        ).json()
+    }
+    assert team_board[red_id] == 0
+    assert team_board[blue_id] == 0
+
+    # 개인 스코어보드에는 반영됨
+    user_board = {
+        b["user_id"]: b["total_score"]
+        for b in (
+            await client.get(
+                f"/api/seasons/{season_id}/user-scoreboard", headers=admin_headers
+            )
+        ).json()
+    }
+    assert user_board[user_a] == 9
 
 
 # ----- 팀원 / 멤버십 -----

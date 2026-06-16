@@ -12,8 +12,22 @@ def _unique(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
-async def _setup(client, admin_headers, participant_type: str = "team_vs"):
-    """season → team → game → timetable → session, 그리고 user 한 명을 만든다."""
+async def _to_in_progress(client, admin_headers, session_id: int) -> None:
+    for to in ("ready", "in_progress"):
+        await client.post(
+            f"/api/sessions/{session_id}/transition",
+            json={"to": to},
+            headers=admin_headers,
+        )
+
+
+async def _setup(
+    client, admin_headers, participant_type: str = "team_vs", advance: bool = True
+):
+    """season → team → game → timetable → session, 그리고 user 한 명을 만든다.
+
+    advance=True 면 세션을 in_progress 까지 전이해 점수 기록이 가능한 상태로 둔다.
+    """
     season_id = (
         await client.post(
             "/api/seasons", json={"name": _unique("시즌")}, headers=admin_headers
@@ -66,6 +80,8 @@ async def _setup(client, admin_headers, participant_type: str = "team_vs"):
         json={"user_id": user_id},
         headers=admin_headers,
     )
+    if advance:
+        await _to_in_progress(client, admin_headers, session_id)
     return session_id, team_id, user_id
 
 
@@ -142,7 +158,7 @@ async def test_create_score_for_team_and_user(client, admin_headers):
 
 
 async def test_create_score_with_correct_chat_log(client, admin_headers):
-    session_id, team_id, _ = await _setup(client, admin_headers)
+    session_id, team_id, _ = await _setup(client, admin_headers, advance=False)
     chat_log_id = await _create_chat_log(client, admin_headers, session_id, "봄날")
 
     res = await client.post(
@@ -160,7 +176,7 @@ async def test_create_score_with_correct_chat_log(client, admin_headers):
 
 
 async def test_create_score_with_same_chat_log_conflicts(client, admin_headers):
-    session_id, team_id, _ = await _setup(client, admin_headers)
+    session_id, team_id, _ = await _setup(client, admin_headers, advance=False)
     chat_log_id = await _create_chat_log(client, admin_headers, session_id, "봄날")
     payload = {
         "subject_type": "team",
@@ -185,7 +201,7 @@ async def test_create_score_with_same_chat_log_conflicts(client, admin_headers):
 
 
 async def test_create_score_with_wrong_chat_log_rejected(client, admin_headers):
-    session_id, team_id, _ = await _setup(client, admin_headers)
+    session_id, team_id, _ = await _setup(client, admin_headers, advance=False)
     chat_log_id = await _create_chat_log(client, admin_headers, session_id, "여름밤")
 
     res = await client.post(
@@ -203,7 +219,7 @@ async def test_create_score_with_wrong_chat_log_rejected(client, admin_headers):
 
 async def test_create_score_with_other_session_chat_log_rejected(client, admin_headers):
     session_id, team_id, _ = await _setup(client, admin_headers)
-    other_session_id, _, _ = await _setup(client, admin_headers)
+    other_session_id, _, _ = await _setup(client, admin_headers, advance=False)
     chat_log_id = await _create_chat_log(client, admin_headers, other_session_id, "봄날")
 
     res = await client.post(
@@ -260,6 +276,35 @@ async def test_score_summary_aggregates(client, admin_headers):
         "subject_name": "참가자",
         "total_score": 3,
     } in summary
+
+
+async def test_team_vs_summary_rolls_individual_into_team(client, admin_headers):
+    # 팀 대항전 세션 스코어보드는 팀 행만 — 개인 점수가 팀에 합산된다.
+    session_id, team_id, user_id = await _setup(client, admin_headers)  # team_vs
+
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 7},
+        headers=admin_headers,
+    )
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "team", "subject_id": team_id, "score": 3},
+        headers=admin_headers,
+    )
+
+    summary = (
+        await client.get(
+            f"/api/sessions/{session_id}/scores/summary", headers=admin_headers
+        )
+    ).json()
+    # 개인 행은 노출되지 않고, 팀 합산(7+3=10)만 보인다.
+    assert summary == [{
+        "subject_type": "team",
+        "subject_id": team_id,
+        "subject_name": "레드팀",
+        "total_score": 10,
+    }]
 
 
 async def test_list_and_update_score(client, admin_headers):
@@ -325,6 +370,52 @@ async def test_team_score_does_not_touch_user_point(client, admin_headers):
         headers=admin_headers,
     )
     assert await _member_point(client, admin_headers, team_id, user_id) == 0
+
+
+async def test_score_blocked_before_game_starts(client, admin_headers):
+    # idle 상태 (advance=False) 에서는 점수를 기록할 수 없다.
+    session_id, team_id, _ = await _setup(client, admin_headers, advance=False)
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "team", "subject_id": team_id, "score": 5},
+        headers=admin_headers,
+    )
+    assert res.status_code == 409
+
+
+async def test_done_blocks_create_but_allows_edit(client, admin_headers):
+    session_id, team_id, _ = await _setup(client, admin_headers)
+    # 진행 중에 점수를 하나 기록해 둔다.
+    score_id = (
+        await client.post(
+            f"/api/sessions/{session_id}/scores",
+            json={"subject_type": "team", "subject_id": team_id, "score": 5},
+            headers=admin_headers,
+        )
+    ).json()["id"]
+
+    # scoring → done 으로 종료.
+    for to in ("scoring", "done"):
+        await client.post(
+            f"/api/sessions/{session_id}/transition",
+            json={"to": to},
+            headers=admin_headers,
+        )
+
+    # done 상태: 신규 기록(POST)은 막히고,
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "team", "subject_id": team_id, "score": 3},
+        headers=admin_headers,
+    )
+    assert res.status_code == 409
+
+    # 기존 점수 정정(PATCH)은 종료 후에도 허용된다.
+    res = await client.patch(
+        f"/api/scores/{score_id}", json={"score": 99}, headers=admin_headers
+    )
+    assert res.status_code == 200
+    assert res.json()["score"] == 99
 
 
 async def test_score_unknown_session_404(client, admin_headers):

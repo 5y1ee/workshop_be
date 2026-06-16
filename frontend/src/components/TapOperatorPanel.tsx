@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { api, ApiError, type GameRound, type ScoreLog, type TapResult } from '../api'
+import {
+  api,
+  ApiError,
+  canScoreInState,
+  type GameRound,
+  type GameState,
+  type ScoreLog,
+  type TapResult,
+} from '../api'
 import { useLive } from '../live'
 
 interface Props {
@@ -7,6 +15,7 @@ interface Props {
   sessionId: number
   round: GameRound | null
   participantType: string
+  state: GameState
   onScored: () => void
 }
 
@@ -30,8 +39,10 @@ export default function TapOperatorPanel({
   sessionId,
   round,
   participantType,
+  state,
   onScored,
 }: Props) {
+  const canScore = canScoreInState(state)
   const { subscribe } = useLive()
   const [results, setResults] = useState<TapResult[] | null>(null)
   const [scores, setScores] = useState<ScoreLog[]>([])
@@ -273,6 +284,9 @@ export default function TapOperatorPanel({
             순위 결과
             {mode === 'timing' && targetTime != null && ` — 목표: ${targetTime.toFixed(1)}초`}
           </div>
+          {!canScore && (
+            <p className="muted">진행중(in_progress)~보상(reward) 상태에서만 점수를 기록할 수 있습니다.</p>
+          )}
           {results!.length === 0 ? (
             <p className="muted">제출 없음</p>
           ) : (
@@ -301,6 +315,7 @@ export default function TapOperatorPanel({
                         className="op-btn tap-award-btn"
                         disabled={
                           busyId === r.user_id ||
+                          !canScore ||
                           awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
                         }
                         onClick={() => award(r)}

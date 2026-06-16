@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   api,
   ApiError,
+  canScoreInState,
   type GameState,
   type SeasonMembership,
   type Team,
@@ -139,6 +140,8 @@ export default function OperatorPanel({
   const nexts = NEXT_STATES[state]
   // 룰렛 시드는 in_progress 진입 시 생성됨 → 그 이후 상태에서만 스핀 가능
   const canSpin = ['in_progress', 'scoring', 'reward'].includes(state)
+  // 점수 기록은 진행 중(in_progress/scoring/reward) 에만 허용 (백엔드와 동일)
+  const canScore = canScoreInState(state)
 
   return (
     <section className="op">
@@ -179,7 +182,11 @@ export default function OperatorPanel({
             value={teamScore}
             onChange={(e) => setTeamScore(e.target.value)}
           />
-          <button className="op-btn" disabled={busy || teams.length === 0} onClick={submitTeamScore}>
+          <button
+            className="op-btn"
+            disabled={busy || !canScore || teams.length === 0}
+            onClick={submitTeamScore}
+          >
             팀 점수 기록
           </button>
         </div>
@@ -210,13 +217,16 @@ export default function OperatorPanel({
           />
           <button
             className="op-btn"
-            disabled={busy || selectableUsers.length === 0}
+            disabled={busy || !canScore || selectableUsers.length === 0}
             onClick={submitUserScore}
           >
             개인 점수 기록
           </button>
         </div>
         <p className="muted">현재 게임 참여자 유형: {participantTypeLabel(participantType)}</p>
+        {!canScore && (
+          <p className="muted">진행중(in_progress)~보상(reward) 상태에서만 점수를 기록할 수 있습니다.</p>
+        )}
       </div>
 
       <div className="op-block">

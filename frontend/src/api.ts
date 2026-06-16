@@ -82,6 +82,18 @@ export interface ScoreLog {
 
 export type GameState = 'idle' | 'ready' | 'in_progress' | 'scoring' | 'reward' | 'done'
 
+// 백엔드 score_service.CREATABLE_STATES 미러: 신규 점수 기록이 허용되는 상태
+export const SCOREABLE_STATES: GameState[] = ['in_progress', 'scoring', 'reward']
+
+export const canScoreInState = (state: GameState | null | undefined): boolean =>
+  state != null && SCOREABLE_STATES.includes(state)
+
+// 백엔드 score_service.EDITABLE_STATES 미러: 기존 점수 정정이 허용되는 상태(종료 후 포함)
+export const EDITABLE_SCORE_STATES: GameState[] = [...SCOREABLE_STATES, 'done']
+
+export const canEditScoreInState = (state: GameState | null | undefined): boolean =>
+  state != null && EDITABLE_SCORE_STATES.includes(state)
+
 export interface TeamScore {
   team_id: number
   name: string
@@ -338,6 +350,15 @@ export const api = {
     }),
   scores: (token: string, sessionId: number) =>
     request<ScoreLog[]>(`/api/sessions/${sessionId}/scores`, token),
+  updateScore: (
+    token: string,
+    scoreId: number,
+    body: { score?: number; memo?: string | null },
+  ) =>
+    request<ScoreLog>(`/api/scores/${scoreId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   rouletteSpin: (token: string, sessionId: number, options: string[], nonce: number) =>
     request<RouletteSpinResult>(`/api/sessions/${sessionId}/roulette/spin`, token, {
       method: 'POST',
