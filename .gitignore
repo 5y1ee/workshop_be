@@ -46,3 +46,6 @@ htmlcov/
 
 # Key
 MyKey.pem
+
+# Python version management
+.python-version
