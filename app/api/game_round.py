@@ -14,6 +14,7 @@ from app.schemas.game_round import (
 from app.services import game_round_service, game_session_service
 from app.services.game_round_service import RoundConflict
 from app.websocket.events import (
+    broadcast_session_state,
     broadcast_round_revealed,
     broadcast_round_started,
     broadcast_tap_closed,
@@ -112,6 +113,22 @@ async def open_round(
     round_id: int, db: DbSession, admin: AdminUser
 ) -> GameRound:
     round_ = await _get_round_or_404(db, round_id)
+    session = await _get_session_or_404(db, round_.session_id)
+    if session.state == "idle":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="세션을 준비 상태로 변경한 뒤 라운드를 오픈하세요.",
+        )
+    if session.state == "ready":
+        session = await game_session_service.transition(
+            db, session, "in_progress", admin.id
+        )
+        await broadcast_session_state(session)
+    elif session.state != "in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="진행중 상태에서만 라운드를 오픈할 수 있습니다.",
+        )
     try:
         round_ = await game_round_service.open_round(db, round_, admin.id)
     except RoundConflict as exc:

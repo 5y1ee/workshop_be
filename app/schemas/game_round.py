@@ -55,6 +55,7 @@ class TapResult(BaseModel):
 
     user_id: int
     nickname: str
+    team_id: int | None
     team_name: str | None
     value: float
     rank: int

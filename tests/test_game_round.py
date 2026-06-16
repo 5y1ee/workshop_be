@@ -67,6 +67,14 @@ async def _create_round(client, admin_headers, session_id, **body):
     )
 
 
+async def _ready_session(client, admin_headers, session_id: int) -> None:
+    await client.post(
+        f"/api/sessions/{session_id}/transition",
+        json={"to": "ready"},
+        headers=admin_headers,
+    )
+
+
 # ---------------------------------------------------------------------------
 # REST: 생성 / 정답 비노출 / open 단일성 / current / close→reveal
 # ---------------------------------------------------------------------------
@@ -95,7 +103,11 @@ async def test_only_one_open_round_per_session(client, admin_headers):
     r1 = (await _create_round(client, admin_headers, session_id, order_index=1)).json()
     r2 = (await _create_round(client, admin_headers, session_id, order_index=2)).json()
 
+    assert (await client.post(f"/api/rounds/{r1['id']}/open", headers=admin_headers)).status_code == 409
+    await _ready_session(client, admin_headers, session_id)
     assert (await client.post(f"/api/rounds/{r1['id']}/open", headers=admin_headers)).status_code == 200
+    session = await client.get(f"/api/sessions/{session_id}", headers=admin_headers)
+    assert session.json()["state"] == "in_progress"
     # 이미 열린 라운드가 있으면 두 번째 open 은 409
     assert (await client.post(f"/api/rounds/{r2['id']}/open", headers=admin_headers)).status_code == 409
 
@@ -123,6 +135,7 @@ async def test_submit_judge_dedupe_and_reveal(client, admin_headers):
             correct_answer="서울",
         )
     ).json()
+    await _ready_session(client, admin_headers, session_id)
     await client.post(f"/api/rounds/{r['id']}/open", headers=admin_headers)
 
     u_correct = await _make_user()
@@ -175,6 +188,7 @@ async def test_record_chat_judges_against_open_round(client, admin_headers):
             client, admin_headers, session_id, prompt="제목은?", correct_answer="봄날"
         )
     ).json()
+    await _ready_session(client, admin_headers, session_id)
     await client.post(f"/api/rounds/{r['id']}/open", headers=admin_headers)
     uid = await _make_user()
 
@@ -195,6 +209,7 @@ async def test_admin_can_list_chat_logs_in_server_order(client, admin_headers):
             client, admin_headers, session_id, prompt="제목은?", correct_answer="봄날"
         )
     ).json()
+    await _ready_session(client, admin_headers, session_id)
     await client.post(f"/api/rounds/{r['id']}/open", headers=admin_headers)
     uid = await _make_user()
 

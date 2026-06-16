@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import {
   api,
   type Game,
@@ -10,6 +10,18 @@ import { useAuth } from '../auth'
 import { useSeason } from '../season'
 import { useLive } from '../live'
 import GameDetail from './GameDetail'
+
+const GAME_MARKERS: Record<number, { x: string; y: string; image: string; size?: string }> = {
+  1: { x: '50%', y: '87%', image: 'charades.png', size: '96px' },
+  2: { x: '25%', y: '75%', image: 'quiz-battle.png', size: '90px' },
+  3: { x: '67%', y: '66%', image: 'song-quiz.png', size: '92px' },
+  4: { x: '26%', y: '56%', image: 'treasure-hunt.png', size: '92px' },
+  5: { x: '65%', y: '47%', image: 'relay-game.png', size: '92px' },
+  6: { x: '24%', y: '37%', image: 'triathlon.png', size: '92px' },
+  7: { x: '67%', y: '27%', image: 'shoe-throw.png', size: '90px' },
+  8: { x: '25%', y: '17%', image: 'zombie-game.png', size: '90px' },
+  9: { x: '51%', y: '8%', image: 'button-challenge.png', size: '96px' },
+}
 
 export default function MainPage() {
   const { token } = useAuth()
@@ -70,37 +82,27 @@ export default function MainPage() {
     )
   }
 
-  // order_index 1(맨 아래) → 9(맨 위) 순서로 섬 위치 정의 (progress-bg.png 기준)
-  const GYM_POSITIONS: { x: string; y: string }[] = [
-    { x: '50%', y: '91%' }, // 1 - 몸으로 말해요 (하단 중앙)
-    { x: '23%', y: '76%' }, // 2 - 퀴즈 대결 (좌)
-    { x: '65%', y: '66%' }, // 3 - 노래 맞추기 (우)
-    { x: '25%', y: '56%' }, // 4 - 보물찾기 (좌)
-    { x: '63%', y: '46%' }, // 5 - 릴레이 게임 (우)
-    { x: '23%', y: '36%' }, // 6 - 철인 3종 (좌)
-    { x: '66%', y: '25%' }, // 7 - 신발 던지기 (우)
-    { x: '21%', y: '16%' }, // 8 - 좀비게임 (좌)
-    { x: '50%', y: '6%'  }, // 9 - 버튼 챌린지 (상단 중앙)
-  ]
-
   return (
     <div className="page main">
       {entries.map((e) => {
-        const pos = GYM_POSITIONS[e.order_index - 1]
-        if (!pos) return null
+        const marker = GAME_MARKERS[e.order_index]
+        if (!marker) return null
         const s = sessions[e.id]
         const st = (s?.state as GameState) ?? null
         const done = st === 'done'
         const live = st === 'in_progress' || st === 'scoring' || st === 'reward'
+        const label = games[e.game_id]?.title ?? title(e)
         return (
-          <div
+          <button
             key={e.id}
             className={`gym-marker${done ? ' done' : ''}${live ? ' live' : ''}`}
-            style={{ left: pos.x, top: pos.y }}
+            style={{ left: marker.x, top: marker.y, '--marker-size': marker.size ?? '92px' } as CSSProperties}
             onClick={() => setSelected(e)}
+            aria-label={label}
           >
-            <span className="gym-title">{games[e.game_id]?.title ?? title(e)}</span>
-          </div>
+            <img src={`/images/${marker.image}`} alt="" />
+            <span className="gym-title">{label}</span>
+          </button>
         )
       })}
     </div>

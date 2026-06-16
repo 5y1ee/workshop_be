@@ -12,7 +12,7 @@ def _unique(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
-async def _setup(client, admin_headers):
+async def _setup(client, admin_headers, participant_type: str = "team_vs"):
     """season → team → game → timetable → session, 그리고 user 한 명을 만든다."""
     season_id = (
         await client.post(
@@ -29,7 +29,11 @@ async def _setup(client, admin_headers):
     game_id = (
         await client.post(
             "/api/games",
-            json={"title": _unique("게임"), "participant_type": "team_vs", "input_type": "chat"},
+            json={
+                "title": _unique("게임"),
+                "participant_type": participant_type,
+                "input_type": "chat",
+            },
             headers=admin_headers,
         )
     ).json()["id"]
@@ -57,6 +61,11 @@ async def _setup(client, admin_headers):
             headers=admin_headers,
         )
     ).json()["id"]
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{team_id}/members",
+        json={"user_id": user_id},
+        headers=admin_headers,
+    )
     return session_id, team_id, user_id
 
 
@@ -68,6 +77,11 @@ async def _create_chat_log(client, admin_headers, session_id: int, answer: str) 
             headers=admin_headers,
         )
     ).json()["id"]
+    await client.post(
+        f"/api/sessions/{session_id}/transition",
+        json={"to": "ready"},
+        headers=admin_headers,
+    )
     await client.post(f"/api/rounds/{round_id}/open", headers=admin_headers)
 
     async with AsyncSessionLocal() as db:
@@ -104,6 +118,24 @@ async def test_create_score_for_team_and_user(client, admin_headers):
     res = await client.post(
         f"/api/sessions/{session_id}/scores",
         json={"subject_type": "user", "subject_id": user_id, "score": 3},
+        headers=admin_headers,
+    )
+    assert res.status_code == 201
+    assert res.json()["subject_type"] == "user"
+
+    user_session_id, user_team_id, user_id = await _setup(
+        client, admin_headers, participant_type="individual"
+    )
+    res = await client.post(
+        f"/api/sessions/{user_session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 3},
+        headers=admin_headers,
+    )
+    assert res.status_code == 201
+
+    res = await client.post(
+        f"/api/sessions/{user_session_id}/scores",
+        json={"subject_type": "team", "subject_id": user_team_id, "score": 5},
         headers=admin_headers,
     )
     assert res.status_code == 201
@@ -188,7 +220,7 @@ async def test_create_score_with_other_session_chat_log_rejected(client, admin_h
 
 
 async def test_score_summary_aggregates(client, admin_headers):
-    session_id, team_id, user_id = await _setup(client, admin_headers)
+    session_id, team_id, _ = await _setup(client, admin_headers)
 
     for sc in (10, 5):
         await client.post(
@@ -196,24 +228,32 @@ async def test_score_summary_aggregates(client, admin_headers):
             json={"subject_type": "team", "subject_id": team_id, "score": sc},
             headers=admin_headers,
         )
-    await client.post(
-        f"/api/sessions/{session_id}/scores",
-        json={"subject_type": "user", "subject_id": user_id, "score": 3},
-        headers=admin_headers,
-    )
 
     res = await client.get(
         f"/api/sessions/{session_id}/scores/summary", headers=admin_headers
     )
     assert res.status_code == 200
     summary = res.json()
-    # 내림차순: team 15 먼저, user 3
-    assert summary[0] == {
+    assert summary == [{
         "subject_type": "team",
         "subject_id": team_id,
         "subject_name": "레드팀",
         "total_score": 15,
-    }
+    }]
+
+    user_session_id, _, user_id = await _setup(
+        client, admin_headers, participant_type="individual"
+    )
+    await client.post(
+        f"/api/sessions/{user_session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 3},
+        headers=admin_headers,
+    )
+    res = await client.get(
+        f"/api/sessions/{user_session_id}/scores/summary", headers=admin_headers
+    )
+    assert res.status_code == 200
+    summary = res.json()
     assert {
         "subject_type": "user",
         "subject_id": user_id,

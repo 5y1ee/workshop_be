@@ -88,6 +88,12 @@ export interface TeamScore {
   total_score: number
 }
 
+export interface UserScore {
+  user_id: number
+  name: string
+  total_score: number
+}
+
 export interface TeamMember {
   id: number
   nickname: string
@@ -144,6 +150,7 @@ export interface GameRound {
 export interface TapResult {
   user_id: number
   nickname: string
+  team_id: number | null
   team_name: string | null
   value: number
   rank: number
@@ -238,6 +245,8 @@ export const api = {
   // --- 포켓몬 UI 화면용 조회 ---
   seasonScoreboard: (token: string, seasonId: number) =>
     request<TeamScore[]>(`/api/seasons/${seasonId}/scoreboard`, token),
+  seasonUserScoreboard: (token: string, seasonId: number) =>
+    request<UserScore[]>(`/api/seasons/${seasonId}/user-scoreboard`, token),
   teamMembers: (token: string, teamId: number) =>
     request<TeamMember[]>(`/api/teams/${teamId}/members`, token),
   myTeam: (token: string, seasonId: number) =>
@@ -273,10 +282,14 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  deleteTimetable: (token: string, entryId: number) =>
+    request<void>(`/api/timetable/${entryId}`, token, { method: 'DELETE' }),
 
   // --- 운영자(admin) 전용 쓰기 ---
   createSession: (token: string, timetableId: number) =>
     request<GameSession>(`/api/timetable/${timetableId}/session`, token, { method: 'POST' }),
+  session: (token: string, sessionId: number) =>
+    request<GameSession>(`/api/sessions/${sessionId}`, token),
   transition: (token: string, sessionId: number, to: GameState) =>
     request<GameSession>(`/api/sessions/${sessionId}/transition`, token, {
       method: 'POST',

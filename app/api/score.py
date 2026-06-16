@@ -7,9 +7,14 @@ from app.schemas.score import (
     ScoreSummaryItem,
     ScoreUpdate,
     TeamScoreboardItem,
+    UserScoreboardItem,
 )
 from app.services import game_session_service, score_service
-from app.services.score_service import DuplicateChatScore, InvalidChatScore
+from app.services.score_service import (
+    DuplicateChatScore,
+    InvalidChatScore,
+    InvalidScoreTarget,
+)
 from app.websocket.events import broadcast_score_recorded
 
 router = APIRouter(tags=["scores"])
@@ -43,6 +48,10 @@ async def create_score(
     try:
         score = await score_service.create_score(db, session_id, payload, admin.id)
     except InvalidChatScore as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except InvalidScoreTarget as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
@@ -80,6 +89,17 @@ async def season_scoreboard(
 ) -> list[TeamScoreboardItem]:
     """시즌 전체 팀 누적 점수 랭킹 (점수 0 팀 포함, 내림차순)."""
     return await score_service.season_scoreboard(db, season_id)
+
+
+@router.get(
+    "/seasons/{season_id}/user-scoreboard",
+    response_model=list[UserScoreboardItem],
+)
+async def season_user_scoreboard(
+    season_id: int, db: DbSession, user: CurrentUser
+) -> list[UserScoreboardItem]:
+    """시즌 전체 개인 누적 점수 랭킹 (점수 0 배정 유저 포함, 내림차순)."""
+    return await score_service.season_user_scoreboard(db, season_id)
 
 
 @router.patch("/scores/{score_id}", response_model=ScoreRead)

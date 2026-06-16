@@ -294,6 +294,7 @@ async def _user_info(db: AsyncSession, round_: GameRound) -> dict[int, dict]:
         select(
             User.id,
             User.nickname,
+            Team.id.label("team_id"),
             Team.name.label("team_name"),
         )
         .outerjoin(
@@ -306,7 +307,14 @@ async def _user_info(db: AsyncSession, round_: GameRound) -> dict[int, dict]:
         .outerjoin(Team, Team.id == TeamMembership.team_id)
     )
     rows = (await db.execute(stmt)).all()
-    return {r.id: {"nickname": r.nickname, "team_name": r.team_name} for r in rows}
+    return {
+        r.id: {
+            "nickname": r.nickname,
+            "team_id": r.team_id,
+            "team_name": r.team_name,
+        }
+        for r in rows
+    }
 
 
 async def _tap_count_results(db: AsyncSession, round_: GameRound) -> list[TapResult]:
@@ -320,9 +328,10 @@ async def _tap_count_results(db: AsyncSession, round_: GameRound) -> list[TapRes
     info = await _user_info(db, round_)
     results = []
     for rank, (user_id, cnt) in enumerate(items, start=1):
-        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_name": None})
+        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
         results.append(TapResult(user_id=user_id, nickname=u["nickname"],
-                                 team_name=u["team_name"], value=float(cnt), rank=rank))
+                                 team_id=u["team_id"], team_name=u["team_name"],
+                                 value=float(cnt), rank=rank))
     return results
 
 
@@ -336,13 +345,14 @@ async def _tap_speed_results(db: AsyncSession, round_: GameRound) -> list[TapRes
     info = await _user_info(db, round_)
     results = []
     for rank, (user_id, answer) in enumerate(items, start=1):
-        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_name": None})
+        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
         try:
             ms = float(answer)
         except (ValueError, TypeError):
             ms = 0.0
         results.append(TapResult(user_id=user_id, nickname=u["nickname"],
-                                 team_name=u["team_name"], value=ms, rank=rank))
+                                 team_id=u["team_id"], team_name=u["team_name"],
+                                 value=ms, rank=rank))
     return results
 
 
@@ -365,9 +375,10 @@ async def _tap_timing_results(db: AsyncSession, round_: GameRound) -> list[TapRe
     scored.sort(key=lambda x: x[1])
     results = []
     for rank, (user_id, diff) in enumerate(scored, start=1):
-        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_name": None})
+        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
         results.append(TapResult(user_id=user_id, nickname=u["nickname"],
-                                 team_name=u["team_name"], value=diff, rank=rank))
+                                 team_id=u["team_id"], team_name=u["team_name"],
+                                 value=diff, rank=rank))
     return results
 
 

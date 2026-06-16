@@ -172,6 +172,7 @@ async def broadcast_tap_closed(
                 {
                     "user_id": r.user_id,
                     "nickname": r.nickname,
+                    "team_id": r.team_id,
                     "team_name": r.team_name,
                     "value": r.value,
                     "rank": r.rank,
