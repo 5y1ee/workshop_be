@@ -1,4 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
+// VITE_API_BASE 가 지정되지 않으면, 브라우저가 접속한 호스트(서버 IP/도메인)의
+// 8000 포트를 기본 백엔드로 사용한다. (localhost 로 박으면 외부 접속 시 방문자 PC를 가리킴)
+const API_BASE =
+  import.meta.env.VITE_API_BASE ??
+  (typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : 'http://localhost:8000')
 
 export interface LoginResponse {
   access_token: string
