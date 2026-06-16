@@ -110,6 +110,36 @@ async def test_scoreboard_visible_to_normal_user(client, admin_headers, user_hea
     assert res.status_code == 200
 
 
+async def test_season_user_scoreboard_aggregates_and_sorts(client, admin_headers):
+    season_id, red_id, blue_id = await _season_with_two_teams(client, admin_headers)
+    user_a = await _create_user(client, admin_headers, nickname="개인A")
+    user_b = await _create_user(client, admin_headers, nickname="개인B")
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_a},
+        headers=admin_headers,
+    )
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{blue_id}/members",
+        json={"user_id": user_b},
+        headers=admin_headers,
+    )
+    session_id = await _session_for_season(client, admin_headers, season_id)
+
+    for sc in (7, 8):
+        await client.post(
+            f"/api/sessions/{session_id}/scores",
+            json={"subject_type": "user", "subject_id": user_a, "score": sc},
+            headers=admin_headers,
+        )
+
+    res = await client.get(f"/api/seasons/{season_id}/user-scoreboard", headers=admin_headers)
+    assert res.status_code == 200
+    board = res.json()
+    assert board[0] == {"user_id": user_a, "name": "개인A", "total_score": 15}
+    assert board[1] == {"user_id": user_b, "name": "개인B", "total_score": 0}
+
+
 # ----- 팀원 / 멤버십 -----
 
 async def test_team_members_returns_assigned_users(client, admin_headers):

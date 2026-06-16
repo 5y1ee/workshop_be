@@ -45,3 +45,9 @@ class TeamScoreboardItem(BaseModel):
     team_id: int
     name: str
     total_score: int
+
+
+class UserScoreboardItem(BaseModel):
+    user_id: int
+    name: str
+    total_score: int

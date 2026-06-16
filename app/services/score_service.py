@@ -6,8 +6,10 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.game import Game
 from app.models.game_session import GameChatLog, GameScoreLog, GameSession
 from app.models.team import Team
+from app.models.team_member import TeamMembership
 from app.models.timetable import Timetable
 from app.models.user import User
 from app.schemas.score import ScoreCreate, ScoreUpdate
@@ -25,6 +27,10 @@ class DuplicateChatScore(Exception):
     """이미 점수로 확정된 채팅 후보."""
 
 
+class InvalidScoreTarget(Exception):
+    """현재 세션/시즌에 점수를 줄 수 없는 대상."""
+
+
 async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -> bool:
     """subject_type 에 따라 teams 또는 users 에 해당 id 가 있는지 확인."""
     model = Team if subject_type == "team" else User
@@ -32,9 +38,53 @@ async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -
     return result.scalar_one_or_none() is not None
 
 
+async def _session_game_context(
+    db: AsyncSession, session_id: int
+) -> tuple[str, int] | None:
+    result = await db.execute(
+        select(Game.participant_type, Timetable.season_id)
+        .join(Timetable, Timetable.game_id == Game.id)
+        .join(GameSession, GameSession.timetable_id == Timetable.id)
+        .where(GameSession.id == session_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        return None
+    return row.participant_type, row.season_id
+
+
+async def _validate_score_target(
+    db: AsyncSession, session_id: int, data: ScoreCreate
+) -> None:
+    context = await _session_game_context(db, session_id)
+    if context is None:
+        raise InvalidScoreTarget("게임 세션을 찾을 수 없습니다.")
+
+    _, season_id = context
+
+    if data.subject_type == "team":
+        team_season_id = await db.scalar(
+            select(Team.season_id).where(Team.id == data.subject_id)
+        )
+        if team_season_id != season_id:
+            raise InvalidScoreTarget("현재 시즌의 팀에만 점수를 기록할 수 있습니다.")
+        return
+
+    exists_in_season = await db.scalar(
+        select(TeamMembership.id).where(
+            TeamMembership.season_id == season_id,
+            TeamMembership.user_id == data.subject_id,
+        )
+    )
+    if exists_in_season is None:
+        raise InvalidScoreTarget("현재 시즌에 배정된 유저에게만 점수를 기록할 수 있습니다.")
+
+
 async def create_score(
     db: AsyncSession, session_id: int, data: ScoreCreate, admin_id: int
 ) -> GameScoreLog:
+    await _validate_score_target(db, session_id, data)
+
     if data.chat_log_id is not None:
         chat = await db.get(GameChatLog, data.chat_log_id)
         if chat is None or chat.session_id != session_id:
@@ -171,6 +221,46 @@ async def season_scoreboard(db: AsyncSession, season_id: int) -> list[dict]:
         {
             "team_id": row.id,
             "name": row.name,
+            "total_score": int(row.total_score),
+        }
+        for row in result.all()
+    ]
+
+
+async def season_user_scoreboard(db: AsyncSession, season_id: int) -> list[dict]:
+    """시즌 전체 개인 누적 점수 (내림차순). 점수가 0인 배정 유저도 포함한다."""
+    season_session_ids = (
+        select(GameSession.id)
+        .join(Timetable, GameSession.timetable_id == Timetable.id)
+        .where(Timetable.season_id == season_id)
+        .scalar_subquery()
+    )
+    total = func.coalesce(func.sum(GameScoreLog.score), 0)
+    result = await db.execute(
+        select(User.id, User.nickname, total.label("total_score"))
+        .select_from(User)
+        .join(
+            TeamMembership,
+            and_(
+                TeamMembership.user_id == User.id,
+                TeamMembership.season_id == season_id,
+            ),
+        )
+        .outerjoin(
+            GameScoreLog,
+            and_(
+                GameScoreLog.subject_type == "user",
+                GameScoreLog.subject_id == User.id,
+                GameScoreLog.session_id.in_(season_session_ids),
+            ),
+        )
+        .group_by(User.id, User.nickname)
+        .order_by(total.desc(), User.id)
+    )
+    return [
+        {
+            "user_id": row.id,
+            "name": row.nickname,
             "total_score": int(row.total_score),
         }
         for row in result.all()
