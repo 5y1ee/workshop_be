@@ -29,6 +29,7 @@ async def broadcast_score_recorded(score: GameScoreLog) -> None:
             "session_id": score.session_id,
             "subject_type": score.subject_type,
             "subject_id": score.subject_id,
+            "chat_log_id": score.chat_log_id,
             "score": score.score,
         }
     )

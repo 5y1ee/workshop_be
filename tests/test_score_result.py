@@ -2,6 +2,11 @@
 
 import uuid
 
+from app.core.security import hash_password
+from app.db.session import AsyncSessionLocal
+from app.models.user import User
+from app.services import game_round_service
+
 
 def _unique(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
@@ -55,6 +60,31 @@ async def _setup(client, admin_headers):
     return session_id, team_id, user_id
 
 
+async def _create_chat_log(client, admin_headers, session_id: int, answer: str) -> int:
+    round_id = (
+        await client.post(
+            f"/api/sessions/{session_id}/rounds",
+            json={"order_index": 1, "prompt": "제목은?", "correct_answer": "봄날"},
+            headers=admin_headers,
+        )
+    ).json()["id"]
+    await client.post(f"/api/rounds/{round_id}/open", headers=admin_headers)
+
+    async with AsyncSessionLocal() as db:
+        user = User(
+            username=_unique("chat"),
+            password=hash_password("pw12345678"),
+            nickname="채팅참가자",
+            role="user",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        round_ = await game_round_service.get_open_round(db, session_id)
+        chat = await game_round_service.record_chat(db, session_id, round_, user.id, answer)
+        return chat.id
+
+
 # ----- Scores -----
 
 async def test_create_score_for_team_and_user(client, admin_headers):
@@ -77,6 +107,84 @@ async def test_create_score_for_team_and_user(client, admin_headers):
         headers=admin_headers,
     )
     assert res.status_code == 201
+
+
+async def test_create_score_with_correct_chat_log(client, admin_headers):
+    session_id, team_id, _ = await _setup(client, admin_headers)
+    chat_log_id = await _create_chat_log(client, admin_headers, session_id, "봄날")
+
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={
+            "subject_type": "team",
+            "subject_id": team_id,
+            "score": 10,
+            "chat_log_id": chat_log_id,
+        },
+        headers=admin_headers,
+    )
+    assert res.status_code == 201
+    assert res.json()["chat_log_id"] == chat_log_id
+
+
+async def test_create_score_with_same_chat_log_conflicts(client, admin_headers):
+    session_id, team_id, _ = await _setup(client, admin_headers)
+    chat_log_id = await _create_chat_log(client, admin_headers, session_id, "봄날")
+    payload = {
+        "subject_type": "team",
+        "subject_id": team_id,
+        "score": 10,
+        "chat_log_id": chat_log_id,
+    }
+    assert (
+        await client.post(
+            f"/api/sessions/{session_id}/scores",
+            json=payload,
+            headers=admin_headers,
+        )
+    ).status_code == 201
+
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json=payload,
+        headers=admin_headers,
+    )
+    assert res.status_code == 409
+
+
+async def test_create_score_with_wrong_chat_log_rejected(client, admin_headers):
+    session_id, team_id, _ = await _setup(client, admin_headers)
+    chat_log_id = await _create_chat_log(client, admin_headers, session_id, "여름밤")
+
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={
+            "subject_type": "team",
+            "subject_id": team_id,
+            "score": 10,
+            "chat_log_id": chat_log_id,
+        },
+        headers=admin_headers,
+    )
+    assert res.status_code == 400
+
+
+async def test_create_score_with_other_session_chat_log_rejected(client, admin_headers):
+    session_id, team_id, _ = await _setup(client, admin_headers)
+    other_session_id, _, _ = await _setup(client, admin_headers)
+    chat_log_id = await _create_chat_log(client, admin_headers, other_session_id, "봄날")
+
+    res = await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={
+            "subject_type": "team",
+            "subject_id": team_id,
+            "score": 10,
+            "chat_log_id": chat_log_id,
+        },
+        headers=admin_headers,
+    )
+    assert res.status_code == 400
 
 
 async def test_score_summary_aggregates(client, admin_headers):

@@ -9,6 +9,7 @@ from app.schemas.score import (
     TeamScoreboardItem,
 )
 from app.services import game_session_service, score_service
+from app.services.score_service import DuplicateChatScore, InvalidChatScore
 from app.websocket.events import broadcast_score_recorded
 
 router = APIRouter(tags=["scores"])
@@ -39,7 +40,16 @@ async def create_score(
 ) -> ScoreRead:
     await _require_session(db, session_id)
     await _require_subject(db, payload.subject_type, payload.subject_id)
-    score = await score_service.create_score(db, session_id, payload, admin.id)
+    try:
+        score = await score_service.create_score(db, session_id, payload, admin.id)
+    except InvalidChatScore as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except DuplicateChatScore as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     await broadcast_score_recorded(score)
     return score
 

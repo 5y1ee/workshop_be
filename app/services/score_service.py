@@ -3,9 +3,10 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.game_session import GameScoreLog, GameSession
+from app.models.game_session import GameChatLog, GameScoreLog, GameSession
 from app.models.team import Team
 from app.models.timetable import Timetable
 from app.models.user import User
@@ -14,6 +15,14 @@ from app.schemas.score import ScoreCreate, ScoreUpdate
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class InvalidChatScore(Exception):
+    """정답 후보 채팅과 연결할 수 없는 점수 기록."""
+
+
+class DuplicateChatScore(Exception):
+    """이미 점수로 확정된 채팅 후보."""
 
 
 async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -> bool:
@@ -26,16 +35,35 @@ async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -
 async def create_score(
     db: AsyncSession, session_id: int, data: ScoreCreate, admin_id: int
 ) -> GameScoreLog:
+    if data.chat_log_id is not None:
+        chat = await db.get(GameChatLog, data.chat_log_id)
+        if chat is None or chat.session_id != session_id:
+            raise InvalidChatScore("현재 세션의 채팅 후보가 아닙니다.")
+        if not chat.is_correct:
+            raise InvalidChatScore("정답 후보만 점수로 기록할 수 있습니다.")
+        existing = await db.execute(
+            select(GameScoreLog.id).where(GameScoreLog.chat_log_id == data.chat_log_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise DuplicateChatScore("이미 점수로 기록된 정답 후보입니다.")
+
     score = GameScoreLog(
         session_id=session_id,
         subject_type=data.subject_type,
         subject_id=data.subject_id,
+        chat_log_id=data.chat_log_id,
         score=data.score,
         memo=data.memo,
         created_by=admin_id,
     )
     db.add(score)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if data.chat_log_id is not None:
+            raise DuplicateChatScore("이미 점수로 기록된 정답 후보입니다.") from exc
+        raise
     await db.refresh(score)
     return score
 
