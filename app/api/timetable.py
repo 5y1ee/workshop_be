@@ -62,3 +62,17 @@ async def update_timetable_entry(
     if payload.game_id is not None:
         await _validate_game(db, payload.game_id)
     return await timetable_service.update_entry(db, entry, payload, admin.id)
+
+
+@router.delete("/timetable/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_timetable_entry(
+    entry_id: int, db: DbSession, admin: AdminUser
+) -> None:
+    entry = await _get_entry_or_404(db, entry_id)
+    try:
+        await timetable_service.delete_entry(db, entry)
+    except timetable_service.TimetableDeleteBlocked as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc

@@ -101,6 +101,55 @@ async def test_timetable_crud_flow(client, admin_headers):
     assert res.status_code == 200
     assert res.json()["order_index"] == 5
 
+    # 삭제
+    res = await client.delete(f"/api/timetable/{entry_id}", headers=admin_headers)
+    assert res.status_code == 204
+    res = await client.get(f"/api/timetable/{entry_id}", headers=admin_headers)
+    assert res.status_code == 404
+
+
+async def test_timetable_delete_reindexes_and_blocks_started_entry(client, admin_headers):
+    season_id = await _create_season(client, admin_headers)
+    game_id = (await _create_game(client, admin_headers)).json()["id"]
+    ids = []
+    for idx in (1, 2, 3):
+        ids.append((
+            await client.post(
+                f"/api/seasons/{season_id}/timetable",
+                json={"game_id": game_id, "order_index": idx},
+                headers=admin_headers,
+            )
+        ).json()["id"])
+
+    res = await client.delete(f"/api/timetable/{ids[1]}", headers=admin_headers)
+    assert res.status_code == 204
+    res = await client.get(f"/api/seasons/{season_id}/timetable", headers=admin_headers)
+    assert [e["order_index"] for e in res.json()] == [1, 2]
+    assert [e["id"] for e in res.json()] == [ids[0], ids[2]]
+
+    # 세션만 생성되고 아직 시작하지 않은 idle 항목은 삭제 가능
+    await client.post(f"/api/timetable/{ids[0]}/session", headers=admin_headers)
+    res = await client.delete(f"/api/timetable/{ids[0]}", headers=admin_headers)
+    assert res.status_code == 204
+
+    started_id = (
+        await client.post(
+            f"/api/seasons/{season_id}/timetable",
+            json={"game_id": game_id, "order_index": 2},
+            headers=admin_headers,
+        )
+    ).json()["id"]
+    session_id = (
+        await client.post(f"/api/timetable/{started_id}/session", headers=admin_headers)
+    ).json()["id"]
+    await client.post(
+        f"/api/sessions/{session_id}/transition",
+        json={"to": "ready"},
+        headers=admin_headers,
+    )
+    res = await client.delete(f"/api/timetable/{started_id}", headers=admin_headers)
+    assert res.status_code == 409
+
 
 async def test_timetable_ordering(client, admin_headers):
     season_id = await _create_season(client, admin_headers)
