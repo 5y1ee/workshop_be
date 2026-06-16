@@ -21,6 +21,7 @@ import ButtonPanel from '../components/ButtonPanel'
 import ChatJudgePanel from '../components/ChatJudgePanel'
 import TapPanel from '../components/TapPanel'
 import TapOperatorPanel from '../components/TapOperatorPanel'
+import ScoreHistoryPanel from '../components/ScoreHistoryPanel'
 
 interface Props {
   entry: TimetableEntry
@@ -195,21 +196,23 @@ export default function GameDetail({
           {isButton && <ButtonPanel sessionId={sessionId} round={currentRound} />}
           {isTap && <TapPanel sessionId={sessionId} round={currentRound} />}
 
-          {isAdmin && isChat && (
+          {isAdmin && isChat && state && (
             <ChatJudgePanel
               token={t}
               sessionId={sessionId}
               round={currentRound}
               participantType={game?.participant_type ?? 'team_vs'}
+              state={state}
               onScored={refresh}
             />
           )}
-          {isAdmin && isTap && (
+          {isAdmin && isTap && state && (
             <TapOperatorPanel
               token={t}
               sessionId={sessionId}
               round={currentRound}
               participantType={game?.participant_type ?? 'team_vs'}
+              state={state}
               onScored={refresh}
             />
           )}
@@ -265,6 +268,17 @@ export default function GameDetail({
               participantType={game?.participant_type ?? 'team_vs'}
               onStateChange={setState}
               onScored={refresh}
+            />
+          )}
+
+          {isAdmin && state && (
+            <ScoreHistoryPanel
+              key={`sh-${sessionId}`}
+              token={t}
+              sessionId={sessionId}
+              state={state}
+              subjectLabel={(type, id) => subjectLabel(type, id)}
+              onChanged={refresh}
             />
           )}
         </>

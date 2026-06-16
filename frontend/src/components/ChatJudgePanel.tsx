@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, ApiError, type ChatLog, type GameRound, type ScoreLog } from '../api'
+import {
+  api,
+  ApiError,
+  canScoreInState,
+  type ChatLog,
+  type GameRound,
+  type GameState,
+  type ScoreLog,
+} from '../api'
 import { useLive } from '../live'
 
 interface Props {
@@ -7,6 +15,7 @@ interface Props {
   sessionId: number
   round: GameRound | null
   participantType: string
+  state: GameState
   onScored: () => void
 }
 
@@ -20,8 +29,10 @@ export default function ChatJudgePanel({
   sessionId,
   round,
   participantType,
+  state,
   onScored,
 }: Props) {
+  const canScore = canScoreInState(state)
   const { subscribe } = useLive()
   const [logs, setLogs] = useState<ChatLog[]>([])
   const [scores, setScores] = useState<ScoreLog[]>([])
@@ -122,6 +133,10 @@ export default function ChatJudgePanel({
         </label>
       </div>
 
+      {!canScore && (
+        <p className="muted">진행중(in_progress)~보상(reward) 상태에서만 점수를 기록할 수 있습니다.</p>
+      )}
+
       {correctLogs.length === 0 ? (
         <p className="muted">아직 정답 후보가 없습니다.</p>
       ) : (
@@ -138,7 +153,7 @@ export default function ChatJudgePanel({
               </div>
               <button
                 className="op-btn"
-                disabled={busyId === log.id || awardedIds.has(log.id)}
+                disabled={busyId === log.id || awardedIds.has(log.id) || !canScore}
                 onClick={() => award(log)}
               >
                 {awardedIds.has(log.id) ? '기록됨' : '점수 기록'}

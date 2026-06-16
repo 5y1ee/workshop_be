@@ -14,6 +14,7 @@ from app.services.score_service import (
     DuplicateChatScore,
     InvalidChatScore,
     InvalidScoreTarget,
+    ScoringNotAllowed,
 )
 from app.websocket.events import broadcast_score_recorded
 
@@ -54,6 +55,10 @@ async def create_score(
     except InvalidScoreTarget as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except ScoringNotAllowed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     except DuplicateChatScore as exc:
         raise HTTPException(
@@ -111,4 +116,9 @@ async def update_score(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="점수 기록을 찾을 수 없습니다."
         )
-    return await score_service.update_score(db, score, payload, admin.id)
+    try:
+        return await score_service.update_score(db, score, payload, admin.id)
+    except ScoringNotAllowed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc

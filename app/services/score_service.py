@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, case, func, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,42 @@ class DuplicateChatScore(Exception):
 
 class InvalidScoreTarget(Exception):
     """현재 세션/시즌에 점수를 줄 수 없는 대상."""
+
+
+class ScoringNotAllowed(Exception):
+    """현재 게임 상태에서는 점수를 기록/수정할 수 없다."""
+
+
+# 신규 점수 기록이 허용되는 상태 (게임이 진행 중인 동안)
+CREATABLE_STATES: frozenset[str] = frozenset({"in_progress", "scoring", "reward"})
+# 기존 점수 수정(정정)이 허용되는 상태 — 종료(done) 후에도 정정 가능
+EDITABLE_STATES: frozenset[str] = CREATABLE_STATES | {"done"}
+
+# 개인 점수가 소속 팀 점수로 합산되는 게임 유형 (팀 대항전).
+# 그 외 유형(individual, team_internal)의 개인 점수는 개인 전용으로만 집계한다.
+TEAM_SCORED_TYPES: frozenset[str] = frozenset({"team_vs", "representative"})
+
+
+async def _require_scoreable_state(
+    db: AsyncSession, session_id: int, *, for_update: bool = False
+) -> None:
+    """세션이 점수를 매길/정정할 수 있는 상태인지 검증한다.
+
+    신규 기록(for_update=False)은 in_progress/scoring/reward 에서만 허용하고,
+    기존 점수 정정(for_update=True)은 종료(done) 후에도 허용한다.
+    """
+    allowed = EDITABLE_STATES if for_update else CREATABLE_STATES
+    state = await db.scalar(
+        select(GameSession.state).where(GameSession.id == session_id)
+    )
+    if state is None:
+        raise InvalidScoreTarget("게임 세션을 찾을 수 없습니다.")
+    if state not in allowed:
+        action = "수정" if for_update else "기록"
+        raise ScoringNotAllowed(
+            f"현재 상태('{state}')에서는 점수를 {action}할 수 없습니다. "
+            f"가능한 상태: {sorted(allowed)}"
+        )
 
 
 async def _apply_user_point_delta(
@@ -94,6 +130,7 @@ async def _validate_score_target(
 async def create_score(
     db: AsyncSession, session_id: int, data: ScoreCreate, admin_id: int
 ) -> GameScoreLog:
+    await _require_scoreable_state(db, session_id)
     await _validate_score_target(db, session_id, data)
 
     if data.chat_log_id is not None:
@@ -150,6 +187,7 @@ async def get_score(db: AsyncSession, score_id: int) -> GameScoreLog | None:
 async def update_score(
     db: AsyncSession, score: GameScoreLog, data: ScoreUpdate, admin_id: int
 ) -> GameScoreLog:
+    await _require_scoreable_state(db, score.session_id, for_update=True)
     old_score = score.score
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(score, key, value)
@@ -163,42 +201,73 @@ async def update_score(
 
 
 async def score_summary(db: AsyncSession, session_id: int) -> list[dict]:
-    """세션 내 subject 별 합산 점수 (내림차순)."""
+    """세션 스코어보드. 게임 유형에 따라 팀 또는 개인 단위로 집계한다.
+
+    팀 대항전(team_vs/representative)은 팀 행만 — team 직접 점수에 더해 같은
+    세션에서 개인이 얻은 점수를 그 유저의 시즌 팀으로 귀속해 합산한다.
+    개인전(individual/team_internal)은 개인 행만 반환한다.
+    """
+    context = await _session_game_context(db, session_id)
+    if context is None:
+        return []
+    participant_type, season_id = context
     total = func.coalesce(func.sum(GameScoreLog.score), 0)
-    subject_name = case(
-        (GameScoreLog.subject_type == "team", Team.name),
-        else_=User.nickname,
-    )
+
+    if participant_type in TEAM_SCORED_TYPES:
+        # 각 로그를 팀으로 귀속: team 점수는 자기 팀, user 점수는 시즌 소속 팀.
+        attributed_team_id = case(
+            (GameScoreLog.subject_type == "team", GameScoreLog.subject_id),
+            else_=TeamMembership.team_id,
+        )
+        result = await db.execute(
+            select(
+                Team.id.label("subject_id"),
+                Team.name.label("subject_name"),
+                total.label("total_score"),
+            )
+            .select_from(GameScoreLog)
+            .outerjoin(
+                TeamMembership,
+                and_(
+                    GameScoreLog.subject_type == "user",
+                    TeamMembership.user_id == GameScoreLog.subject_id,
+                    TeamMembership.season_id == season_id,
+                ),
+            )
+            .join(Team, Team.id == attributed_team_id)
+            .where(GameScoreLog.session_id == session_id)
+            .group_by(Team.id, Team.name)
+            .order_by(total.desc())
+        )
+        return [
+            {
+                "subject_type": "team",
+                "subject_id": row.subject_id,
+                "subject_name": row.subject_name,
+                "total_score": int(row.total_score),
+            }
+            for row in result.all()
+        ]
+
     result = await db.execute(
-        select(
-            GameScoreLog.subject_type,
-            GameScoreLog.subject_id,
-            subject_name.label("subject_name"),
-            total.label("total_score"),
-        )
-        .outerjoin(
-            Team,
-            and_(
-                GameScoreLog.subject_type == "team",
-                GameScoreLog.subject_id == Team.id,
-            ),
-        )
-        .outerjoin(
+        select(User.id, User.nickname, total.label("total_score"))
+        .select_from(GameScoreLog)
+        .join(
             User,
             and_(
                 GameScoreLog.subject_type == "user",
-                GameScoreLog.subject_id == User.id,
+                User.id == GameScoreLog.subject_id,
             ),
         )
         .where(GameScoreLog.session_id == session_id)
-        .group_by(GameScoreLog.subject_type, GameScoreLog.subject_id, Team.name, User.nickname)
+        .group_by(User.id, User.nickname)
         .order_by(total.desc())
     )
     return [
         {
-            "subject_type": row.subject_type,
-            "subject_id": row.subject_id,
-            "subject_name": row.subject_name,
+            "subject_type": "user",
+            "subject_id": row.id,
+            "subject_name": row.nickname,
             "total_score": int(row.total_score),
         }
         for row in result.all()
@@ -208,27 +277,55 @@ async def score_summary(db: AsyncSession, session_id: int) -> list[dict]:
 async def season_scoreboard(db: AsyncSession, season_id: int) -> list[dict]:
     """시즌 전체 팀 누적 점수 (내림차순). 점수가 0인 팀도 포함한다.
 
-    game_score_logs → game_sessions → timetable 경로로 시즌에 속한 세션의
-    team 점수를 합산한다.
+    팀 총점 = team 직접 점수 + 팀 대항전(team_vs/representative) 세션에서 개인이
+    얻은 점수를 그 유저의 시즌 팀으로 귀속한 합. 개인전 점수는 팀에 합산하지 않는다.
     """
-    season_session_ids = (
-        select(GameSession.id)
+    # 시즌 세션과 게임 유형을 한 번에 묶는다.
+    season_sessions = (
+        select(
+            GameSession.id.label("session_id"),
+            Game.participant_type.label("participant_type"),
+        )
         .join(Timetable, GameSession.timetable_id == Timetable.id)
+        .join(Game, Timetable.game_id == Game.id)
         .where(Timetable.season_id == season_id)
-        .scalar_subquery()
+        .subquery()
     )
-    total = func.coalesce(func.sum(GameScoreLog.score), 0)
+    # 시즌 내 각 점수 로그를 팀으로 귀속 (귀속 불가 시 NULL → 집계 제외).
+    attributed = (
+        select(
+            case(
+                (GameScoreLog.subject_type == "team", GameScoreLog.subject_id),
+                else_=TeamMembership.team_id,
+            ).label("team_id"),
+            GameScoreLog.score.label("score"),
+        )
+        .select_from(GameScoreLog)
+        .join(season_sessions, GameScoreLog.session_id == season_sessions.c.session_id)
+        .outerjoin(
+            TeamMembership,
+            and_(
+                GameScoreLog.subject_type == "user",
+                TeamMembership.user_id == GameScoreLog.subject_id,
+                TeamMembership.season_id == season_id,
+            ),
+        )
+        .where(
+            or_(
+                GameScoreLog.subject_type == "team",
+                and_(
+                    GameScoreLog.subject_type == "user",
+                    season_sessions.c.participant_type.in_(TEAM_SCORED_TYPES),
+                ),
+            )
+        )
+        .subquery()
+    )
+    total = func.coalesce(func.sum(attributed.c.score), 0)
     result = await db.execute(
         select(Team.id, Team.name, total.label("total_score"))
         .select_from(Team)
-        .outerjoin(
-            GameScoreLog,
-            and_(
-                GameScoreLog.subject_type == "team",
-                GameScoreLog.subject_id == Team.id,
-                GameScoreLog.session_id.in_(season_session_ids),
-            ),
-        )
+        .outerjoin(attributed, attributed.c.team_id == Team.id)
         .where(Team.season_id == season_id)
         .group_by(Team.id, Team.name)
         .order_by(total.desc(), Team.id)
