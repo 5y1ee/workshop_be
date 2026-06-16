@@ -19,12 +19,13 @@ import secrets
 import sys
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
+import app.models  # noqa: F401 — Base.metadata 에 전체 테이블 등록
 from app.models.game import Game
 from app.models.game_round import GameRound
 from app.models.game_session import GameResult, GameScoreLog, GameSession
@@ -77,7 +78,11 @@ def _target_db() -> str:
 
 async def reset() -> None:
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # Alembic 미적용·구 스키마(예: users.team_id FK)가 남아 있으면
+        # metadata.drop_all 만으로는 FK 의존성 때문에 실패할 수 있다.
+        await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
         await conn.run_sync(Base.metadata.create_all)
     print(f"✅ reset 완료 — '{_target_db()}' 의 모든 테이블 drop + create")
 
