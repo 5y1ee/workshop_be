@@ -6,6 +6,7 @@ interface Props {
   token: string
   sessionId: number
   round: GameRound | null
+  participantType: string
   onScored: () => void
 }
 
@@ -14,7 +15,13 @@ function timeLabel(value: string) {
 }
 
 /** 운영자 전용: chat 타입 정답 후보 확인 + 점수 확정. */
-export default function ChatJudgePanel({ token, sessionId, round, onScored }: Props) {
+export default function ChatJudgePanel({
+  token,
+  sessionId,
+  round,
+  participantType,
+  onScored,
+}: Props) {
   const { subscribe } = useLive()
   const [logs, setLogs] = useState<ChatLog[]>([])
   const [scores, setScores] = useState<ScoreLog[]>([])
@@ -66,8 +73,13 @@ export default function ChatJudgePanel({ token, sessionId, round, onScored }: Pr
   )
 
   const award = async (log: ChatLog) => {
-    const subjectType = log.team_id == null ? 'user' : 'team'
-    const subjectId = log.team_id ?? log.user_id
+    const scoresTeam = participantType === 'team_vs' || participantType === 'representative'
+    if (scoresTeam && log.team_id == null) {
+      setError('팀 배정이 없는 유저는 팀 점수를 기록할 수 없습니다.')
+      return
+    }
+    const subjectType = scoresTeam ? 'team' : 'user'
+    const subjectId = scoresTeam ? log.team_id! : log.user_id
     setBusyId(log.id)
     setError(null)
     try {

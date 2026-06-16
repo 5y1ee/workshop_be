@@ -6,6 +6,7 @@ interface Props {
   token: string
   sessionId: number
   round: GameRound | null
+  participantType: string
   onScored: () => void
 }
 
@@ -24,7 +25,13 @@ interface SubmittedRow {
   arrived_at: number
 }
 
-export default function TapOperatorPanel({ token, sessionId, round, onScored }: Props) {
+export default function TapOperatorPanel({
+  token,
+  sessionId,
+  round,
+  participantType,
+  onScored,
+}: Props) {
   const { subscribe } = useLive()
   const [results, setResults] = useState<TapResult[] | null>(null)
   const [scores, setScores] = useState<ScoreLog[]>([])
@@ -106,20 +113,27 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     }
   }
 
+  const scoresTeam = participantType === 'team_vs' || participantType === 'representative'
   const currentMemoPrefix = displayRound ? `tap#${displayRound.order_index} ` : ''
   const awardedIds = new Set(
     scores
       .filter((s) => currentMemoPrefix !== '' && s.memo?.startsWith(currentMemoPrefix))
-      .map((s) => s.subject_id),
+      .map((s) => `${s.subject_type}:${s.subject_id}`),
   )
 
   const award = async (r: TapResult) => {
+    if (scoresTeam && r.team_id == null) {
+      setError('팀 배정이 없는 유저는 팀 점수를 기록할 수 없습니다.')
+      return
+    }
+    const subjectType = scoresTeam ? 'team' : 'user'
+    const subjectId = scoresTeam ? r.team_id! : r.user_id
     setBusyId(r.user_id)
     setError(null)
     try {
       const created = await api.createScore(token, sessionId, {
-        subject_type: 'user',
-        subject_id: r.user_id,
+        subject_type: subjectType,
+        subject_id: subjectId,
         score,
         memo: `tap#${displayRound?.order_index ?? '-'} ${r.nickname}: ${formatValue(mode, r.value)}`,
       })
@@ -285,10 +299,15 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
                     <td>
                       <button
                         className="op-btn tap-award-btn"
-                        disabled={busyId === r.user_id || awardedIds.has(r.user_id)}
+                        disabled={
+                          busyId === r.user_id ||
+                          awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
+                        }
                         onClick={() => award(r)}
                       >
-                        {awardedIds.has(r.user_id) ? '기록됨' : '점수 기록'}
+                        {awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
+                          ? '기록됨'
+                          : '점수 기록'}
                       </button>
                     </td>
                   </tr>

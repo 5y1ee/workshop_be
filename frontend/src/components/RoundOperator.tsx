@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { api, ApiError, type GameRound, type TapMode } from '../api'
+import { api, ApiError, type GameRound, type GameState, type TapMode } from '../api'
 
 interface Props {
   token: string
   sessionId: number
   rounds: GameRound[]
   inputType: string
+  sessionState: GameState
   onChanged: () => void
+  onStateChanged: (state: GameState) => void
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -16,7 +18,15 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 /** 운영자 전용: 세션의 라운드 생성 / 오픈 / 마감. */
-export default function RoundOperator({ token, sessionId, rounds, inputType, onChanged }: Props) {
+export default function RoundOperator({
+  token,
+  sessionId,
+  rounds,
+  inputType,
+  sessionState,
+  onChanged,
+  onStateChanged,
+}: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,6 +41,7 @@ export default function RoundOperator({ token, sessionId, rounds, inputType, onC
 
   const isButton = inputType === 'button' || inputType === 'vote'
   const isTap = inputType === 'tap'
+  const canOpenRound = sessionState === 'ready' || sessionState === 'in_progress'
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -68,6 +79,13 @@ export default function RoundOperator({ token, sessionId, rounds, inputType, onC
       setAnswer('')
     })
 
+  const openRound = (roundId: number) =>
+    run(async () => {
+      await api.openRound(token, roundId)
+      const session = await api.session(token, sessionId)
+      onStateChanged(session.state as GameState)
+    })
+
   return (
     <section className="op">
       <h3 className="section">🎯 라운드 진행 (운영자)</h3>
@@ -85,8 +103,8 @@ export default function RoundOperator({ token, sessionId, rounds, inputType, onC
                 {r.status === 'waiting' && (
                   <button
                     className="op-btn round-action-btn"
-                    disabled={busy}
-                    onClick={() => run(() => api.openRound(token, r.id).then(() => {}))}
+                    disabled={busy || !canOpenRound}
+                    onClick={() => openRound(r.id)}
                   >
                     오픈
                   </button>
@@ -123,6 +141,9 @@ export default function RoundOperator({ token, sessionId, rounds, inputType, onC
       {/* 라운드 추가 폼 */}
       <div className="op-block">
         <div className="op-label">라운드 추가 (#{rounds.length + 1})</div>
+        {!canOpenRound && (
+          <p className="muted">운영자 패널에서 준비 상태로 변경한 뒤 라운드를 오픈하세요.</p>
+        )}
 
         {/* tap은 문제/힌트 없음 */}
         {!isTap && (

@@ -7,8 +7,10 @@ import {
   type GameSession,
   type GameState,
   type ScoreSummaryItem,
+  type SeasonMembership,
   type Team,
   type TimetableEntry,
+  type UserProfile,
 } from '../api'
 import { useAuth } from '../auth'
 import { useLive } from '../live'
@@ -56,6 +58,8 @@ export default function GameDetail({
   const [summary, setSummary] = useState<ScoreSummaryItem[]>([])
   const [results, setResults] = useState<GameResult[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [memberships, setMemberships] = useState<SeasonMembership[]>([])
   const [rounds, setRounds] = useState<GameRound[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -68,6 +72,16 @@ export default function GameDetail({
   useEffect(() => {
     api.teams(t, seasonId).then(setTeams).catch(() => setTeams([]))
   }, [t, seasonId])
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setUsers([])
+      setMemberships([])
+      return
+    }
+    api.users(t, { role: 'user' }).then(setUsers).catch(() => setUsers([]))
+    api.seasonMembers(t, seasonId).then(setMemberships).catch(() => setMemberships([]))
+  }, [isAdmin, t, seasonId])
 
   const teamName = (id: number) => teams.find((x) => x.id === id)?.name ?? `팀 #${id}`
   const subjectLabel = (type: string, id: number, name?: string | null) => {
@@ -186,6 +200,7 @@ export default function GameDetail({
               token={t}
               sessionId={sessionId}
               round={currentRound}
+              participantType={game?.participant_type ?? 'team_vs'}
               onScored={refresh}
             />
           )}
@@ -194,6 +209,7 @@ export default function GameDetail({
               token={t}
               sessionId={sessionId}
               round={currentRound}
+              participantType={game?.participant_type ?? 'team_vs'}
               onScored={refresh}
             />
           )}
@@ -224,24 +240,29 @@ export default function GameDetail({
             </>
           )}
 
-          {isAdmin && (isChat || isButton || isTap) && (
+          {isAdmin && state && (isChat || isButton || isTap) && (
             <RoundOperator
               key={`ro-${sessionId}`}
               token={t}
               sessionId={sessionId}
               rounds={rounds}
               inputType={inputType}
+              sessionState={state}
               onChanged={refresh}
+              onStateChanged={setState}
             />
           )}
 
-          {isAdmin && state && !isChat && (
+          {isAdmin && state && (
             <OperatorPanel
               key={sessionId}
               token={t}
               sessionId={sessionId}
               state={state}
               teams={teams}
+              users={users}
+              memberships={memberships}
+              participantType={game?.participant_type ?? 'team_vs'}
               onStateChange={setState}
               onScored={refresh}
             />
