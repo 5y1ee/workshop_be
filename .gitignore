@@ -43,3 +43,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Key
+MyKey.pem
