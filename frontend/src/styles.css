@@ -581,6 +581,22 @@ button:disabled {
 .mini-tabs span { flex: 1; text-align: center; padding: 9px; border-radius: 10px; font-size: 12px; font-weight: 800; border: 1px solid var(--line); background: #fff; }
 .mini-tabs span.on { background: var(--poke-red); color: #fff; border-color: var(--poke-red); }
 .mini-tabs span.off { color: var(--muted); }
+.mini-tabs button {
+  flex: 1;
+  min-height: 36px;
+  padding: 9px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+}
+.mini-tabs button.on {
+  background: var(--poke-red);
+  color: #fff;
+  border-color: var(--poke-red);
+}
 .mini-input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 14px; resize: none; margin-bottom: 12px; font-family: inherit; }
 .wheel-wrap { position: relative; width: 180px; height: 180px; margin: 6px auto 14px; }
 .wheel-spin {

@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { api, resolveAssetUrl, type TeamMember, type TeamScore, type UserProfile } from '../api'
+import {
+  api,
+  resolveAssetUrl,
+  type TeamMember,
+  type TeamScore,
+  type UserProfile,
+  type UserScore,
+} from '../api'
 import { useAuth } from '../auth'
 import { useSeason } from '../season'
 import { useLive } from '../live'
@@ -15,6 +22,7 @@ export default function MyPage() {
   const [members, setMembers] = useState<TeamMember[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [scoreboard, setScoreboard] = useState<TeamScore[]>([])
+  const [userScoreboard, setUserScoreboard] = useState<UserScore[]>([])
 
   // 내 프로필 (profile_image 포함)
   useEffect(() => {
@@ -46,6 +54,7 @@ export default function MyPage() {
   const loadScoreboard = () => {
     if (seasonId == null) return
     api.seasonScoreboard(t, seasonId).then(setScoreboard).catch(() => setScoreboard([]))
+    api.seasonUserScoreboard(t, seasonId).then(setUserScoreboard).catch(() => setUserScoreboard([]))
   }
   useEffect(loadScoreboard, [t, seasonId])
   useEffect(() => {
@@ -55,6 +64,8 @@ export default function MyPage() {
 
   const myRankIdx = scoreboard.findIndex((s) => s.team_id === teamId)
   const myTeamScore = myRankIdx >= 0 ? scoreboard[myRankIdx].total_score : 0
+  const myUserRankIdx = userScoreboard.findIndex((s) => s.user_id === user?.user_id)
+  const myUserScore = myUserRankIdx >= 0 ? userScoreboard[myUserRankIdx].total_score : 0
   const me = members.find((m) => m.id === user?.user_id)
   const myPoint = me?.point ?? profile?.point ?? 0
   const myProfileImage = profile?.profile_image ?? me?.profile_image ?? null
@@ -89,6 +100,14 @@ export default function MyPage() {
           <div className="stat">
             <div className="n">{myTeamScore}</div>
             <div className="l">팀 총점</div>
+          </div>
+          <div className="stat">
+            <div className="n">{myUserRankIdx >= 0 ? `${myUserRankIdx + 1}위` : '—'}</div>
+            <div className="l">개인 순위</div>
+          </div>
+          <div className="stat">
+            <div className="n">{myUserScore}</div>
+            <div className="l">개인 총점</div>
           </div>
         </div>
       </div>
