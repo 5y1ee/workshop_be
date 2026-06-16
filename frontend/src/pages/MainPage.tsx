@@ -11,15 +11,6 @@ import { useSeason } from '../season'
 import { useLive } from '../live'
 import GameDetail from './GameDetail'
 
-const STATE_PILL: Record<GameState, { cls: string; label: string }> = {
-  idle: { cls: 's-idle', label: '대기' },
-  ready: { cls: 's-idle', label: '준비' },
-  in_progress: { cls: 's-live', label: '진행중' },
-  scoring: { cls: 's-live', label: '채점중' },
-  reward: { cls: 's-live', label: '보상' },
-  done: { cls: 's-done', label: '종료' },
-}
-
 export default function MainPage() {
   const { token } = useAuth()
   const t = token as string

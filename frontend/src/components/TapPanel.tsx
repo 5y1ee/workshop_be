@@ -7,6 +7,12 @@ interface Props {
   round: GameRound | null
 }
 
+/** timezone 표기가 없는 ISO 문자열은 UTC 로 간주. (백엔드 일부 응답이 naive UTC) */
+function parseUtcMs(iso: string): number {
+  const hasTz = /[Zz]|[+-]\d{2}:?\d{2}$/.test(iso)
+  return new Date(hasTz ? iso : iso + 'Z').getTime()
+}
+
 /** WebSocket round_started 이벤트에서 받은 라운드 정보 (prop과 호환되는 부분집합). */
 interface LiveRound {
   id: number
@@ -58,14 +64,15 @@ export default function TapPanel({ sessionId, round }: Props) {
   const [results, setResults] = useState<TapResult[] | null>(null)
   const [revealedTarget, setRevealedTarget] = useState<number | null>(null)
 
-  // prop 갱신이 오면 (fetch 후) 내부 state 동기화
+  // prop 갱신이 오면 (fetch 후) 내부 state 동기화.
+  // 단, 라운드가 사라졌다고(round=null) 결과 화면을 꺼뜨리지는 않는다 — 결과 표시 유지.
   useEffect(() => {
-    setActive(roundToLive(round))
+    if (round) setActive(roundToLive(round))
   }, [round])
 
   const mode = active?.tap_mode ?? null
 
-  // 라운드가 바뀌면 모든 진행 상태 초기화
+  // 라운드 id 가 진짜 바뀔 때만 진행 상태 초기화 (close → null 사이클에서 results 보존)
   useEffect(() => {
     setTapCount(0)
     setSignalReceived(false)
@@ -122,7 +129,7 @@ export default function TapPanel({ sessionId, round }: Props) {
   useEffect(() => {
     if (mode !== 'count' || active?.status !== 'open') return
     if (!active.duration || !active.opened_at) return
-    const openedMs = new Date(active.opened_at).getTime()
+    const openedMs = parseUtcMs(active.opened_at)
     const totalMs = active.duration * 1000
 
     const tick = () => {
@@ -142,7 +149,7 @@ export default function TapPanel({ sessionId, round }: Props) {
   useEffect(() => {
     if (mode !== 'timing' || active?.status !== 'open') return
     if (!active.opened_at) return
-    const openedMs = new Date(active.opened_at).getTime()
+    const openedMs = parseUtcMs(active.opened_at)
 
     const tick = () => {
       const sec = Math.max(0, Math.round((Date.now() - openedMs) / 100) / 10)

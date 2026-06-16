@@ -38,7 +38,13 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
   const [liveCounts, setLiveCounts] = useState<CountRow[]>([])     // count 모드 누적
   const [liveSubmits, setLiveSubmits] = useState<SubmittedRow[]>([]) // speed/timing 도착 순
 
-  const mode = round?.tap_mode ?? null
+  // round prop 이 null 이 되어도 결과 화면을 유지하기 위해 마지막으로 본 round 를 보존
+  const [stickyRound, setStickyRound] = useState<GameRound | null>(round)
+  useEffect(() => {
+    if (round) setStickyRound(round)
+  }, [round])
+  const displayRound = round ?? stickyRound
+  const mode = displayRound?.tap_mode ?? null
 
   useEffect(() => {
     setResults(null)
@@ -47,22 +53,22 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     setError(null)
     setLiveCounts([])
     setLiveSubmits([])
-  }, [round?.id])
+  }, [displayRound?.id])
 
   useEffect(() => {
-    if (!round) { setScores([]); return }
+    if (!displayRound) { setScores([]); return }
     api.scores(token, sessionId).then(setScores).catch(() => {})
-  }, [round, sessionId, token])
+  }, [displayRound, sessionId, token])
 
   useEffect(() => {
     return subscribe((e) => {
       if (e.session_id !== sessionId) return
 
       // 운영자 전용 실시간 이벤트
-      if (e.type === 'tap_progress' && e.round_id === round?.id) {
+      if (e.type === 'tap_progress' && e.round_id === displayRound?.id) {
         setLiveCounts((e.counts as CountRow[]) ?? [])
       }
-      if (e.type === 'tap_submitted' && e.round_id === round?.id) {
+      if (e.type === 'tap_submitted' && e.round_id === displayRound?.id) {
         const row: SubmittedRow = {
           user_id: e.user_id as number,
           nickname: e.nickname as string,
@@ -77,7 +83,7 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
         })
       }
 
-      if (e.type === 'tap_closed' && e.round_id === round?.id) {
+      if (e.type === 'tap_closed' && e.round_id === displayRound?.id) {
         setResults((e.results as TapResult[]) ?? [])
         setTargetTime((e.target_time as number | null) ?? null)
       }
@@ -86,7 +92,7 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
         onScored()
       }
     })
-  }, [subscribe, sessionId, round?.id, token, onScored])
+  }, [subscribe, sessionId, displayRound?.id, token, onScored])
 
   const sendSignal = async () => {
     if (!round) return
@@ -100,9 +106,10 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     }
   }
 
+  const currentMemoPrefix = displayRound ? `tap#${displayRound.order_index} ` : ''
   const awardedIds = new Set(
     scores
-      .filter((s) => s.memo?.includes('tap#'))
+      .filter((s) => currentMemoPrefix !== '' && s.memo?.startsWith(currentMemoPrefix))
       .map((s) => s.subject_id),
   )
 
@@ -110,12 +117,16 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     setBusyId(r.user_id)
     setError(null)
     try {
-      await api.createScore(token, sessionId, {
+      const created = await api.createScore(token, sessionId, {
         subject_type: 'user',
         subject_id: r.user_id,
         score,
-        memo: `tap#${round?.order_index ?? '-'} ${r.nickname}: ${formatValue(mode, r.value)}`,
+        memo: `tap#${displayRound?.order_index ?? '-'} ${r.nickname}: ${formatValue(mode, r.value)}`,
       })
+      setScores((prev) => (
+        prev.some((s) => s.id === created.id) ? prev : [...prev, created]
+      ))
+      onScored()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
@@ -123,7 +134,7 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     }
   }
 
-  if (!round) {
+  if (!displayRound) {
     return (
       <section className="op tap-op">
         <h3 className="section">⚡ 탭 게임 결과 (운영자)</h3>
@@ -132,7 +143,8 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
     )
   }
 
-  const isOpen = round.status === 'open'
+  // 현재 진행 중인지: live round prop이 살아있고 open 상태일 때만
+  const isOpen = round?.status === 'open'
   const hasResults = !!results
 
   return (
@@ -153,8 +165,8 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
       <div className="op-block">
         <span className="op-label">
           모드: <strong>{modeLabel(mode)}</strong>
-          {mode === 'count' && round.duration && ` · ${round.duration}초`}
-          {mode === 'timing' && round.target_time != null && ` · 목표 ${round.target_time.toFixed(1)}초`}
+          {mode === 'count' && displayRound.duration && ` · ${displayRound.duration}초`}
+          {mode === 'timing' && displayRound.target_time != null && ` · 목표 ${displayRound.target_time.toFixed(1)}초`}
         </span>
       </div>
 
@@ -250,7 +262,7 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
           {results!.length === 0 ? (
             <p className="muted">제출 없음</p>
           ) : (
-            <table className="tap-result-table">
+            <table className="tap-result-table tap-award-table">
               <thead>
                 <tr className="tap-result-row tap-result-head">
                   <th>순위</th>
@@ -272,7 +284,7 @@ export default function TapOperatorPanel({ token, sessionId, round, onScored }: 
                     <td>{formatValue(mode, r.value)}</td>
                     <td>
                       <button
-                        className="op-btn"
+                        className="op-btn tap-award-btn"
                         disabled={busyId === r.user_id || awardedIds.has(r.user_id)}
                         onClick={() => award(r)}
                       >

@@ -70,8 +70,10 @@ export default function GameDetail({
   }, [t, seasonId])
 
   const teamName = (id: number) => teams.find((x) => x.id === id)?.name ?? `팀 #${id}`
-  const subjectLabel = (type: string, id: number) =>
-    type === 'team' ? teamName(id) : `유저 #${id}`
+  const subjectLabel = (type: string, id: number, name?: string | null) => {
+    if (name) return name
+    return type === 'team' ? teamName(id) : `유저 #${id}`
+  }
 
   const refresh = useCallback(() => {
     if (sessionId == null) {
@@ -90,6 +92,13 @@ export default function GameDetail({
   // 구조가 바뀌는 이벤트에서만 갱신 (채팅/제출 카운트 같은 고빈도 이벤트는 제외)
   useEffect(() => {
     const sid = lastEvent?.session_id as number | undefined
+    if (sid !== sessionId || !lastEvent) return
+
+    // session_state_changed: 이벤트 페이로드의 state를 즉시 반영 (운영자 외 다른 클라이언트 동기화)
+    if (lastEvent.type === 'session_state_changed' && typeof lastEvent.state === 'string') {
+      setState(lastEvent.state as GameState)
+    }
+
     const structural = [
       'round_started',
       'round_revealed',
@@ -97,7 +106,7 @@ export default function GameDetail({
       'score_recorded',
       'result_recorded',
     ]
-    if (sid === sessionId && lastEvent && structural.includes(lastEvent.type)) {
+    if (structural.includes(lastEvent.type)) {
       refresh()
     }
   }, [lastEvent, sessionId, refresh])
@@ -197,7 +206,7 @@ export default function GameDetail({
               {summary.map((s, i) => (
                 <li key={`${s.subject_type}-${s.subject_id}`} className={`row rank-${i + 1}`}>
                   <span className="rank">{i + 1}</span>
-                  <span className="name">{subjectLabel(s.subject_type, s.subject_id)}</span>
+                  <span className="name">{subjectLabel(s.subject_type, s.subject_id, s.subject_name)}</span>
                   <span className="score">{s.total_score}</span>
                 </li>
               ))}

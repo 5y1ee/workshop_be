@@ -63,6 +63,7 @@ export interface Team {
 export interface ScoreSummaryItem {
   subject_type: string
   subject_id: number
+  subject_name: string | null
   total_score: number
 }
 
@@ -292,7 +293,7 @@ export const api = {
       chat_log_id?: number | null
     },
   ) =>
-    request<unknown>(`/api/sessions/${sessionId}/scores`, token, {
+    request<ScoreLog>(`/api/sessions/${sessionId}/scores`, token, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

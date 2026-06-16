@@ -779,6 +779,24 @@ button:disabled {
 .tap-result-row { display: grid; grid-template-columns: 36px 1fr 80px 70px; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--line); align-items: center; }
 .tap-result-head { font-weight: 600; font-size: 12px; color: var(--muted); }
 .tap-rank-1 { background: #fffbea; font-weight: 700; }
+.tap-award-table .tap-result-row { grid-template-columns: 34px minmax(0, 1fr) 64px 66px 76px; }
+.tap-award-table th,
+.tap-award-table td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tap-award-table th:last-child,
+.tap-award-table td:last-child { text-align: right; }
+.tap-award-btn {
+  width: 72px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.tap-award-btn:disabled { cursor: default; }
 
 /* 운영자 라이브 진행 표시 */
 .tap-op .op-block { margin-top: 12px; }
