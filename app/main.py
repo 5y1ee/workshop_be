@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # FE 도메인 정해지면 좁히기
-        allow_credentials=True,
+        allow_credentials=False,  # JWT를 Authorization 헤더로 전송 → 쿠키 불필요. ["*"]와 호환됨
         allow_methods=["*"],
         allow_headers=["*"],
     )
