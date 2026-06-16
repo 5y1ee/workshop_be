@@ -38,7 +38,19 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 /** 드래그로 순서를 바꿀 수 있는 타임테이블 한 줄. */
-function SortableEntryRow({ id, order, title }: { id: number; order: number; title: string }) {
+function SortableEntryRow({
+  id,
+  order,
+  title,
+  busy,
+  onDelete,
+}: {
+  id: number
+  order: number
+  title: string
+  busy: boolean
+  onDelete: (id: number) => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -59,6 +71,9 @@ function SortableEntryRow({ id, order, title }: { id: number; order: number; tit
       <span className="row-main">
         <b>{order}. {title}</b>
       </span>
+      <button className="mini-btn danger" disabled={busy} onClick={() => onDelete(id)}>
+        삭제
+      </button>
     </div>
   )
 }
@@ -240,6 +255,15 @@ export default function AdminPage({ onClose }: Props) {
         label: game ? game.title : null,
       })
       setPickGame('')
+      loadEntries()
+    })
+
+  const deleteEntry = (id: number) =>
+    run(async () => {
+      if (!confirm('이 게임을 진행 목록에서 삭제할까요? 이미 세션이 생성된 항목은 삭제할 수 없습니다.')) {
+        return
+      }
+      await api.deleteTimetable(t, id)
       loadEntries()
     })
 
@@ -502,6 +526,8 @@ export default function AdminPage({ onClose }: Props) {
                         id={en.id}
                         order={en.order_index}
                         title={en.label ?? gameTitle(en.game_id)}
+                        busy={busy}
+                        onDelete={deleteEntry}
                       />
                     ))}
                   </div>
