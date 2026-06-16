@@ -12,7 +12,9 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -29,6 +31,10 @@ class GameRound(Base, TimestampMixin):
         CheckConstraint(
             "status IN ('waiting', 'open', 'closed')",
             name="game_rounds_status_check",
+        ),
+        CheckConstraint(
+            "tap_mode IS NULL OR tap_mode IN ('count', 'speed', 'timing')",
+            name="game_rounds_tap_mode_check",
         ),
         UniqueConstraint(
             "session_id", "order_index", name="uq_game_rounds_session_order"
@@ -70,6 +76,19 @@ class GameRound(Base, TimestampMixin):
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, comment="라운드 마감 시각"
     )
+    # tap 게임 전용 필드
+    tap_mode: Mapped[str | None] = mapped_column(
+        String(10), nullable=True, comment="tap 게임 모드 (count/speed/timing)"
+    )
+    duration: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="tap count 모드 타이머(초)"
+    )
+    target_time: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="tap timing 모드 목표 시간(초, 0.1 단위)"
+    )
+    signal_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="tap speed 모드 신호 발사 시각"
+    )
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", name="fk_game_rounds_created_by"),
         nullable=True,
@@ -86,6 +105,7 @@ class GameRound(Base, TimestampMixin):
     submissions: Mapped[list["RoundSubmission"]] = relationship(
         back_populates="round"
     )
+    tap_logs: Mapped[list["TapLog"]] = relationship(back_populates="round")
 
 
 class RoundSubmission(Base, CreatedAtMixin):
@@ -124,3 +144,27 @@ class RoundSubmission(Base, CreatedAtMixin):
 
     # --- relationships ---
     round: Mapped["GameRound"] = relationship(back_populates="submissions")
+
+
+class TapLog(Base, CreatedAtMixin):
+    """tap 게임 count 모드의 개별 탭 기록. 한 라운드에 한 유저가 여러 번 탭 가능."""
+
+    __tablename__ = "tap_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    round_id: Mapped[int] = mapped_column(
+        ForeignKey("game_rounds.id", name="fk_tap_logs_round"),
+        nullable=False,
+        comment="연결된 라운드 ID",
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", name="fk_tap_logs_user"),
+        nullable=False,
+        comment="탭한 유저 ID",
+    )
+    server_time: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, comment="서버 수신 타임스탬프"
+    )
+
+    # --- relationships ---
+    round: Mapped["GameRound"] = relationship(back_populates="tap_logs")

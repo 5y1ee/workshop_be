@@ -120,6 +120,7 @@ export interface Game {
 }
 
 export type RoundStatus = 'waiting' | 'open' | 'closed'
+export type TapMode = 'count' | 'speed' | 'timing'
 
 export interface GameRound {
   id: number
@@ -131,8 +132,20 @@ export interface GameRound {
   options: string[] | null
   opened_at: string | null
   closed_at: string | null
+  tap_mode: TapMode | null
+  duration: number | null
+  target_time: number | null
+  signal_at: string | null
   created_at: string
   updated_at: string | null
+}
+
+export interface TapResult {
+  user_id: number
+  nickname: string
+  team_name: string | null
+  value: number
+  rank: number
 }
 
 export interface RoundReveal {
@@ -305,6 +318,9 @@ export const api = {
       media_url?: string | null
       options?: string[] | null
       correct_answer?: string | null
+      tap_mode?: TapMode | null
+      duration?: number | null
+      target_time?: number | null
     },
   ) =>
     request<GameRound>(`/api/sessions/${sessionId}/rounds`, token, {
@@ -317,6 +333,8 @@ export const api = {
     request<RoundReveal>(`/api/rounds/${roundId}/close`, token, { method: 'POST' }),
   revealRound: (token: string, roundId: number) =>
     request<RoundReveal>(`/api/rounds/${roundId}/reveal`, token),
+  sendTapSignal: (token: string, roundId: number) =>
+    request<{ status: string }>(`/api/rounds/${roundId}/signal`, token, { method: 'POST' }),
   chatLogs: (token: string, sessionId: number, roundId?: number | null) => {
     const qs = roundId == null ? '' : `?round_id=${roundId}`
     return request<ChatLog[]>(`/api/sessions/${sessionId}/chat-logs${qs}`, token)

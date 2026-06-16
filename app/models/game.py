@@ -12,7 +12,7 @@ class Game(Base, TimestampMixin):
             name="game_participant_type_check",
         ),
         CheckConstraint(
-            "input_type IN ('chat', 'button', 'offline', 'puzzle', 'vote')",
+            "input_type IN ('chat', 'button', 'offline', 'puzzle', 'vote', 'tap')",
             name="game_input_type_check",
         ),
     )

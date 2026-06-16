@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 RoundStatus = Literal["waiting", "open", "closed"]
+TapMode = Literal["count", "speed", "timing"]
 
 
 class RoundCreate(BaseModel):
@@ -12,6 +13,9 @@ class RoundCreate(BaseModel):
     media_url: str | None = None
     options: list[str] | None = None
     correct_answer: str | None = None
+    tap_mode: TapMode | None = None
+    duration: int | None = None
+    target_time: float | None = None
 
 
 class RoundUpdate(BaseModel):
@@ -19,6 +23,9 @@ class RoundUpdate(BaseModel):
     media_url: str | None = None
     options: list[str] | None = None
     correct_answer: str | None = None
+    tap_mode: TapMode | None = None
+    duration: int | None = None
+    target_time: float | None = None
 
 
 class RoundRead(BaseModel):
@@ -35,8 +42,22 @@ class RoundRead(BaseModel):
     options: list[str] | None
     opened_at: datetime | None
     closed_at: datetime | None
+    tap_mode: str | None
+    duration: int | None
+    target_time: float | None
+    signal_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
+
+
+class TapResult(BaseModel):
+    """tap 게임 결과 항목 (모드별 value 의미: count=횟수, speed=반응ms, timing=편차초)."""
+
+    user_id: int
+    nickname: str
+    team_name: str | None
+    value: float
+    rank: int
 
 
 class RoundReveal(BaseModel):

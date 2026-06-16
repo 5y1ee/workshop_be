@@ -17,6 +17,8 @@ import RoundOperator from '../components/RoundOperator'
 import ChatPanel from '../components/ChatPanel'
 import ButtonPanel from '../components/ButtonPanel'
 import ChatJudgePanel from '../components/ChatJudgePanel'
+import TapPanel from '../components/TapPanel'
+import TapOperatorPanel from '../components/TapOperatorPanel'
 
 interface Props {
   entry: TimetableEntry
@@ -60,6 +62,7 @@ export default function GameDetail({
   const inputType = game?.input_type ?? ''
   const isChat = inputType === 'chat'
   const isButton = inputType === 'button' || inputType === 'vote'
+  const isTap = inputType === 'tap'
   const currentRound = rounds.find((r) => r.status === 'open') ?? null
 
   useEffect(() => {
@@ -167,9 +170,18 @@ export default function GameDetail({
             />
           )}
           {isButton && <ButtonPanel sessionId={sessionId} round={currentRound} />}
+          {isTap && <TapPanel sessionId={sessionId} round={currentRound} />}
 
           {isAdmin && isChat && (
             <ChatJudgePanel
+              token={t}
+              sessionId={sessionId}
+              round={currentRound}
+              onScored={refresh}
+            />
+          )}
+          {isAdmin && isTap && (
+            <TapOperatorPanel
               token={t}
               sessionId={sessionId}
               round={currentRound}
@@ -203,7 +215,7 @@ export default function GameDetail({
             </>
           )}
 
-          {isAdmin && (isChat || isButton) && (
+          {isAdmin && (isChat || isButton || isTap) && (
             <RoundOperator
               key={`ro-${sessionId}`}
               token={t}

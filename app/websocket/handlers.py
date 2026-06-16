@@ -16,11 +16,14 @@ from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
 from app.models.user import User
 from app.services import game_round_service
-from app.services.game_round_service import RoundConflict
+from app.services.game_round_service import RoundConflict, get_tap_results
 from app.websocket.events import (
     broadcast_chat_message,
     broadcast_submission_progress,
+    broadcast_tap_closed,
+    broadcast_tap_submitted,
 )
+from app.websocket.manager import manager as _manager
 
 if TYPE_CHECKING:
     from app.websocket.manager import ConnectionManager
@@ -147,3 +150,56 @@ async def _handle_submit_answer(ctx: MessageContext, data: dict[str, Any]) -> No
     )
     # 같은 세션 전체에는 제출 인원 수만 갱신
     await broadcast_submission_progress(round_.session_id, round_id, total)
+
+
+@register("tap_press")
+async def _handle_tap_press(ctx: MessageContext, data: dict[str, Any]) -> None:
+    """tap 게임 버튼 입력.
+    - count 모드: TapLog 에 기록 (다회 가능)
+    - speed 모드: 반응시간(ms) 을 RoundSubmission 에 1회 기록
+    - timing 모드: 경과시간(초, 0.1 단위) 을 RoundSubmission 에 1회 기록
+    """
+    round_id = data.get("round_id")
+    elapsed = data.get("elapsed")  # speed: ms(float), timing: 초(float), count: 무시
+
+    if not isinstance(round_id, int):
+        await _error(ctx, "round_id(정수)가 필요합니다.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        round_ = await game_round_service.get_round(db, round_id)
+        if round_ is None:
+            await _error(ctx, "라운드를 찾을 수 없습니다.")
+            return
+        if round_.tap_mode is None:
+            await _error(ctx, "tap 게임 라운드가 아닙니다.")
+            return
+
+        try:
+            if round_.tap_mode == "count":
+                await game_round_service.record_tap_count(db, round_, ctx.user_id)
+            else:
+                if not isinstance(elapsed, (int, float)):
+                    await _error(ctx, "elapsed(숫자)가 필요합니다.")
+                    return
+                value = str(round(float(elapsed), 1))
+                await game_round_service.record_tap_once(db, round_, ctx.user_id, value)
+        except RoundConflict:
+            # speed/timing 모드 중복 제출은 조용히 무시 (이미 기록됨)
+            return
+
+        # speed/timing: 운영자에게만 제출 사실 + 기록 즉시 송신
+        if round_.tap_mode in ("speed", "timing"):
+            info = await game_round_service._user_info(db, round_)
+            who = info.get(ctx.user_id, {"nickname": f"user#{ctx.user_id}", "team_name": None})
+            await broadcast_tap_submitted(
+                session_id=round_.session_id,
+                round_id=round_.id,
+                user_id=ctx.user_id,
+                nickname=who["nickname"],
+                team_name=who["team_name"],
+                value=float(elapsed),
+                tap_mode=round_.tap_mode,
+            )
+
+    await ctx.websocket.send_json({"type": "tap_accepted", "round_id": round_id})

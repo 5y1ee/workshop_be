@@ -24,8 +24,9 @@ async def websocket_endpoint(
 
     user_id = int(payload["sub"])
     team_id = payload.get("team_id")
+    is_admin = payload.get("role") == "admin"
 
-    await manager.connect(websocket, user_id, team_id)
+    await manager.connect(websocket, user_id, team_id, is_admin=is_admin)
     ctx = MessageContext(
         websocket=websocket, manager=manager, user_id=user_id, team_id=team_id
     )

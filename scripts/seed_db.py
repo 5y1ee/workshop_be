@@ -145,7 +145,7 @@ async def seed() -> None:
                 TeamMembership(season_id=season.id, team_id=team.id, user_id=u.id)
             )
 
-        # --- 게임 8개 ---
+        # --- 게임 9개 ---
         games_def = [
             ("몸으로 말해요", "제스처로 단어 맞히기", "team_vs", "offline"),
             ("퀴즈 대결", "버저 누르고 정답", "team_vs", "button"),
@@ -155,6 +155,7 @@ async def seed() -> None:
             ("철인 3종", "99초 게임 · 실내외 · 팀전원", "team_vs", "offline"),
             ("신발 던지기", "실외 · 전원 예선 후 결승", "individual", "offline"),
             ("좀비게임", "백업 · 실내외 넓은 공간 · 전원", "individual", "offline"),
+            ("버튼 챌린지", "반사신경 버튼 탭 게임 (횟수/빠르기/타이밍)", "team_vs", "tap"),
         ]
         games = [
             Game(title=t, description=d, participant_type=p, input_type=i)
@@ -163,7 +164,7 @@ async def seed() -> None:
         db.add_all(games)
         await db.flush()
 
-        # --- 타임테이블 8개 ---
+        # --- 타임테이블 9개 ---
         entries = [
             Timetable(
                 season_id=season.id,
@@ -286,8 +287,8 @@ async def seed() -> None:
 
     print("✅ seed 완료")
     print("   - 시즌 '가평 워크샵 2026' (active)")
-    print("   - 팀 3 / 참가자 18 / 게임 8 / 타임테이블 8")
-    print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 5")
+    print("   - 팀 3 / 참가자 18 / 게임 9 / 타임테이블 9")
+    print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 6")
     print("   - 라운드: 퀴즈대결(button)·노래맞추기(chat) 각 4문제, 1번 문제 open")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
     print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")

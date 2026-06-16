@@ -29,6 +29,8 @@ body {
 /* 모바일 폰 프레임 (가운데 정렬) */
 .container {
   min-height: 100vh;
+  width: 100%;
+  max-width: 540px;       /* 태블릿에서도 모바일 UI를 중앙 고정 */
   margin: 0 auto;
   background: var(--card);
   display: flex;
@@ -57,7 +59,7 @@ body {
 /* ---------- 메인 ---------- */
 .main {
   height: 100vh;
-  background-image: url('/images/progress-bg.jpg');
+  background-image: url('/images/progress-bg.png');
   background-size: cover;
   background-position: center -30px;
   position: relative;
@@ -672,18 +674,48 @@ button:disabled {
 .btnpanel-status { font-size: 13px; margin: 2px 0 0; }
 
 /* ---- 운영자 라운드 목록 ---- */
-.round-list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* ---- 라운드 목록 (모바일 360px 기준) ---- */
+.round-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .round-item {
-  display: flex; align-items: center; gap: 8px; font-size: 13px;
-  background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  font-size: 13px;
 }
 .round-item.open { border-color: #b6e6c5; background: #f3fbf5; }
-.round-order { font-weight: 800; color: #55607a; }
-.round-prompt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.round-item-top {
+  display: flex; align-items: center; gap: 6px;
+}
+.round-item-sub {
+  font-size: 12px; color: var(--muted); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-left: 2px;
+}
+.round-order { font-weight: 800; color: #55607a; flex-shrink: 0; }
+.round-prompt { flex: 1; }
+.round-action-btn {
+  margin-left: auto; flex-shrink: 0;
+  padding: 6px 14px; font-size: 13px; min-height: 36px;
+}
 .chip.status-waiting { background: #eef1f6; color: #55607a; }
 .chip.status-open { background: #e3f6e8; color: #1f8a44; }
 .chip.status-closed { background: #f0e6ff; color: #6b3fb0; }
-.op-full { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; margin-bottom: 6px; }
+
+/* ---- 라운드 추가 폼 ---- */
+.op-full {
+  display: block; width: 100%; box-sizing: border-box;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
+  font-size: 14px; margin-bottom: 8px; background: #fff;
+  -webkit-appearance: none;
+}
+.op-select-full { appearance: none; -webkit-appearance: none; }
+.tap-form { display: flex; flex-direction: column; }
+.op-btn-add {
+  display: block; width: 100%; padding: 12px; font-size: 15px;
+  font-weight: 700; text-align: center; margin-top: 4px;
+  background: var(--primary); color: #fff; border: none;
+  border-radius: 10px; cursor: pointer; min-height: 44px;
+}
+.op-btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- 운영자 정답 후보 ---- */
 .judge-panel { display: flex; flex-direction: column; gap: 10px; }
@@ -722,3 +754,41 @@ button:disabled {
   .judge-log-list li { grid-template-columns: 62px minmax(0, 1fr); }
   .judge-log-list li span:nth-child(3), .judge-log-list li em { grid-column: 2; }
 }
+
+/* ---- tap panel (참가자) ---- */
+.tappanel { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px; }
+.tap-prompt { text-align: center; }
+.tap-timer { font-size: 40px; font-weight: 800; color: var(--primary); min-height: 52px; }
+.tap-timer-hidden { color: var(--muted); }
+.tap-count { font-size: 64px; font-weight: 900; color: var(--ink); line-height: 1; }
+.tap-btn {
+  width: 180px; height: 180px; border-radius: 50%;
+  font-size: 22px; font-weight: 700;
+  border: none; cursor: pointer;
+  background: var(--primary); color: #fff;
+  transition: background 0.15s, transform 0.08s, opacity 0.15s;
+  user-select: none; -webkit-user-select: none;
+}
+.tap-btn:active { transform: scale(0.93); }
+.tap-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+.tap-btn.signal { background: #22c55e; }
+.tap-btn.done { opacity: 0.55; }
+.tap-feedback { font-size: 13px; color: var(--muted); }
+.tap-results { width: 100%; }
+.tap-result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tap-result-row { display: grid; grid-template-columns: 36px 1fr 80px 70px; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--line); align-items: center; }
+.tap-result-head { font-weight: 600; font-size: 12px; color: var(--muted); }
+.tap-rank-1 { background: #fffbea; font-weight: 700; }
+
+/* 운영자 라이브 진행 표시 */
+.tap-op .op-block { margin-top: 12px; }
+.tap-op .tap-result-table { font-variant-numeric: tabular-nums; }
+
+/* ---- tap operator panel ---- */
+.tap-op { }
+.tap-op-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.tap-signal-btn { background: #22c55e; color: #fff; font-weight: 700; padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.tap-signal-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ---- round operator select ---- */
+.op-select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; background: #fff; flex: 1; }

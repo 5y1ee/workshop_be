@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import AdminUser, CurrentUser, DbSession
@@ -11,7 +13,11 @@ from app.schemas.game_round import (
 )
 from app.services import game_round_service, game_session_service
 from app.services.game_round_service import RoundConflict
-from app.websocket.events import broadcast_round_revealed, broadcast_round_started
+from app.websocket.events import (
+    broadcast_round_revealed,
+    broadcast_round_started,
+    broadcast_tap_closed,
+)
 
 router = APIRouter(tags=["game-rounds"])
 
@@ -113,6 +119,16 @@ async def open_round(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     await broadcast_round_started(round_)
+    # tap count 모드: duration 초 후 자동 마감 + 0.5초 간격 진행 broadcast
+    if round_.tap_mode == "count" and round_.duration:
+        asyncio.create_task(
+            game_round_service._auto_close_tap_round(round_.id, round_.duration)
+        )
+        asyncio.create_task(
+            game_round_service._tap_progress_loop(
+                round_.id, round_.session_id, round_.duration
+            )
+        )
     return round_
 
 
@@ -127,9 +143,31 @@ async def close_round(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
+    # tap 게임이면 결과도 함께 브로드캐스트
+    if round_.tap_mode:
+        results = await game_round_service.get_tap_results(db, round_)
+        await broadcast_tap_closed(round_, results)
     reveal = await _reveal_for(db, round_)
     await broadcast_round_revealed(round_, reveal.total_submissions, reveal.distribution)
     return reveal
+
+
+@router.post("/rounds/{round_id}/signal", status_code=status.HTTP_202_ACCEPTED)
+async def send_tap_signal(round_id: int, db: DbSession, admin: AdminUser) -> dict:
+    """speed 모드: 랜덤 딜레이(1~3초) 후 tap_signal 이벤트 발사."""
+    round_ = await _get_round_or_404(db, round_id)
+    if round_.tap_mode != "speed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="speed 모드 라운드에만 사용할 수 있습니다.",
+        )
+    if round_.status != "open":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="열려 있는(open) 라운드에만 신호를 보낼 수 있습니다.",
+        )
+    asyncio.create_task(game_round_service._send_tap_signal(round_.id))
+    return {"status": "signaling"}
 
 
 @router.get("/rounds/{round_id}/reveal", response_model=RoundReveal)

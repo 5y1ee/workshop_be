@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 ParticipantType = Literal["team_vs", "individual", "team_internal", "representative"]
-InputType = Literal["chat", "button", "offline", "puzzle", "vote"]
+InputType = Literal["chat", "button", "offline", "puzzle", "vote", "tap"]
 
 
 class GameCreate(BaseModel):
