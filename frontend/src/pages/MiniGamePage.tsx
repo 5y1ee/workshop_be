@@ -1,69 +1,193 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { api, type GachaPullResponse } from '../api'
+import { useAuth } from '../auth'
+import { useSeason } from '../season'
 
-// 프론트 전용 즉석 추첨 — 서버에 저장하지 않는다.
+type Phase = 'idle' | 'pulling' | 'win' | 'blank'
+
 export default function MiniGamePage() {
-  const [raw, setRaw] = useState('아론, 지나, 현우, 수민')
-  const [angle, setAngle] = useState(0)
-  const [spinning, setSpinning] = useState(false)
-  const [winner, setWinner] = useState<string | null>(null)
+  const { token, user } = useAuth()
+  const t = token as string
+  const { seasonId } = useSeason()
 
-  const names = raw
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  const [point, setPoint] = useState<number | null>(null)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [result, setResult] = useState<GachaPullResponse | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const spin = () => {
-    if (names.length < 2 || spinning) return
-    setWinner(null)
-    const pick = Math.floor(Math.random() * names.length)
-    // 여러 바퀴 + 당첨자 위치로 정지
-    const turns = 5
-    const slice = 360 / names.length
-    const target = 360 * turns + (360 - (pick * slice + slice / 2))
-    setSpinning(true)
-    setAngle((a) => a + target)
-    window.setTimeout(() => {
-      setSpinning(false)
-      setWinner(names[pick])
-    }, 3200)
+  useEffect(() => {
+    api.me(t).then((p) => setPoint(p.point)).catch(() => setPoint(null))
+  }, [t])
+
+  const pull = async () => {
+    if (phase === 'pulling' || seasonId == null) return
+    setPhase('pulling')
+    setResult(null)
+    setErrorMsg(null)
+
+    try {
+      const res = await api.gachaPull(t, seasonId)
+      timerRef.current = setTimeout(() => {
+        setResult(res)
+        setPoint(res.remaining_point)
+        setPhase(res.is_win ? 'win' : 'blank')
+      }, 1400)
+    } catch (e) {
+      setPhase('idle')
+      setErrorMsg(e instanceof Error ? e.message : '뽑기 중 오류가 발생했습니다.')
+    }
   }
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const canPull = phase !== 'pulling' && (point ?? 0) >= 1 && seasonId != null
 
   return (
     <div className="page">
-      <h3 className="sec-title">🎲 미니게임 · 대표 선정</h3>
-      <div className="mini-tabs">
-        <span className="on">🎡 룰렛</span>
-        <span className="off">🪜 사다리 (준비중)</span>
-      </div>
+      <h3 className="sec-title">🎒 뽑기</h3>
 
-      <div className="card">
-        <div className="op-label">참가자 (쉼표/줄바꿈 구분)</div>
-        <textarea
-          className="mini-input"
-          rows={2}
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-        />
-
-        <div className="wheel-wrap">
-          <div
-            className="wheel-spin"
-            style={{
-              transform: `rotate(${angle}deg)`,
-              transition: spinning ? 'transform 3.1s cubic-bezier(.17,.67,.2,1)' : 'none',
-            }}
-          />
-          <div className="wheel-pin">▼</div>
-          <div className="wheel-hub">{winner ?? 'SPIN'}</div>
+      <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+        {/* 포인트 */}
+        <p className="muted" style={{ marginBottom: 4, fontSize: 13 }}>
+          {user?.nickname}의 보유 포인트
+        </p>
+        <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 20 }}>
+          {point ?? '—'} <span style={{ fontSize: 14, fontWeight: 400 }}>pt</span>
         </div>
 
-        <button className="btn-primary" disabled={names.length < 2 || spinning} onClick={spin}>
-          {spinning ? '돌리는 중…' : '돌리기 🎯'}
-        </button>
-        {winner && <p className="winner">🎉 당첨: {winner}</p>}
+        {/* 주머니 */}
+        <div className={`gacha-bag-wrap${phase === 'pulling' ? ' pulling' : ''}`}>
+          <div className="gacha-bag">
+            {/* 주머니 본체 */}
+            <svg viewBox="0 0 120 140" width="140" height="160" xmlns="http://www.w3.org/2000/svg">
+              {/* 끈 */}
+              <path d="M45 28 Q60 10 75 28" fill="none" stroke="#c0a060" strokeWidth="5" strokeLinecap="round"/>
+              {/* 주머니 몸통 */}
+              <ellipse cx="60" cy="90" rx="48" ry="46" fill="#f5c842"/>
+              <ellipse cx="60" cy="90" rx="48" ry="46" fill="none" stroke="#c0a060" strokeWidth="3"/>
+              {/* 묶음 부분 */}
+              <rect x="42" y="30" width="36" height="18" rx="8" fill="#e8a020"/>
+              <rect x="42" y="30" width="36" height="18" rx="8" fill="none" stroke="#c0a060" strokeWidth="2"/>
+              {/* 물음표 */}
+              {phase === 'idle' || phase === 'pulling' ? (
+                <text x="60" y="100" textAnchor="middle" fontSize="40" fill="#c0a060" fontWeight="bold">?</text>
+              ) : phase === 'win' ? (
+                <text x="60" y="100" textAnchor="middle" fontSize="38">🎉</text>
+              ) : (
+                <text x="60" y="100" textAnchor="middle" fontSize="38">😢</text>
+              )}
+            </svg>
+          </div>
+
+          {/* 손 */}
+          <div className={`gacha-hand${phase === 'pulling' ? ' reach' : ''}`}>
+            🤚
+          </div>
+        </div>
+
+        {/* 결과 텍스트 */}
+        <div style={{ minHeight: 64, marginBottom: 8 }}>
+          {phase === 'idle' && (
+            <p className="muted" style={{ marginTop: 8 }}>주머니에서 뽑아보세요!</p>
+          )}
+          {phase === 'pulling' && (
+            <p className="muted" style={{ marginTop: 8 }}>뽑는 중…</p>
+          )}
+          {phase === 'win' && result?.reward && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
+                🎉 당첨!
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 600, margin: '6px 0' }}>
+                {result.reward.name}
+              </div>
+              {result.reward.description && (
+                <p className="muted" style={{ fontSize: 13 }}>{result.reward.description}</p>
+              )}
+            </div>
+          )}
+          {phase === 'blank' && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 18 }}>아쉽게도 꽝!</div>
+              <p className="muted" style={{ fontSize: 13 }}>다음 기회에 도전하세요.</p>
+            </div>
+          )}
+        </div>
+
+        {errorMsg && (
+          <p style={{ color: '#e53', fontSize: 13, margin: '4px 0' }}>{errorMsg}</p>
+        )}
+
+        {(phase === 'idle' || phase === 'pulling') && (
+          <button
+            className="btn-primary"
+            disabled={!canPull}
+            onClick={pull}
+            style={{ width: '100%', marginTop: 4 }}
+          >
+            {phase === 'pulling'
+              ? '뽑는 중…'
+              : (point ?? 0) < 1
+              ? '포인트 부족'
+              : '뽑기! (-1pt)'}
+          </button>
+        )}
+
+        {(phase === 'win' || phase === 'blank') && (
+          <button
+            className="op-btn"
+            disabled={(point ?? 0) < 1}
+            onClick={() => { setPhase('idle'); setResult(null); pull() }}
+            style={{ marginTop: 8, width: '100%' }}
+          >
+            {(point ?? 0) < 1 ? '포인트 부족' : '한 번 더!'}
+          </button>
+        )}
       </div>
 
-      <div className="note">⚠️ 프론트 전용(JS) 즉석 추첨. 서버에 저장하지 않습니다.</div>
+      <div className="note">⚠️ 뽑기 1회당 1포인트 차감. 당첨 결과는 도감에 반영됩니다.</div>
+
+      <style>{`
+        .gacha-bag-wrap {
+          position: relative;
+          width: 160px;
+          margin: 0 auto 16px;
+          height: 190px;
+        }
+        .gacha-bag {
+          position: absolute;
+          top: 0; left: 50%;
+          transform: translateX(-50%);
+          transition: transform .15s;
+        }
+        .gacha-bag-wrap.pulling .gacha-bag {
+          animation: bagShake .25s ease-in-out 3;
+        }
+        .gacha-hand {
+          position: absolute;
+          bottom: 0; right: -8px;
+          font-size: 36px;
+          transform: rotate(-40deg) translateY(0);
+          transition: transform .4s ease-in-out;
+          pointer-events: none;
+        }
+        .gacha-hand.reach {
+          animation: handReach 1.4s ease-in-out forwards;
+        }
+        @keyframes bagShake {
+          0%   { transform: translateX(-50%) rotate(0deg); }
+          25%  { transform: translateX(-50%) rotate(-6deg); }
+          75%  { transform: translateX(-50%) rotate(6deg); }
+          100% { transform: translateX(-50%) rotate(0deg); }
+        }
+        @keyframes handReach {
+          0%   { transform: rotate(-40deg) translateY(0); }
+          40%  { transform: rotate(-10deg) translateY(-60px) translateX(-20px); }
+          70%  { transform: rotate(-10deg) translateY(-60px) translateX(-20px); }
+          100% { transform: rotate(-40deg) translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }

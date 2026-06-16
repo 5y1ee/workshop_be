@@ -11,6 +11,7 @@ from app.models.game_session import (
 from app.models.hidden_role import HiddenRole, UserHiddenRole
 from app.models.raffle import RaffleTicket
 from app.models.reward import Reward
+from app.models.reward_claim import RewardClaim
 from app.models.season import Season
 from app.models.team import Team
 from app.models.team_member import TeamMembership
@@ -33,6 +34,7 @@ __all__ = [
     "RoundSubmission",
     "TapLog",
     "Reward",
+    "RewardClaim",
     "Buff",
     "TeamBuff",
     "Envelope",

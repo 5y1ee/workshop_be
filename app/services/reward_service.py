@@ -34,6 +34,7 @@ async def create_reward(
         description=data.description,
         total_count=data.total_count,
         image_url=data.image_url,
+        win_rate=round(data.win_rate_pct / 100, 4),
     )
     db.add(reward)
     await db.commit()
@@ -44,7 +45,10 @@ async def create_reward(
 async def update_reward(
     db: AsyncSession, reward: Reward, data: RewardUpdate, admin_id: int
 ) -> Reward:
-    for key, value in data.model_dump(exclude_unset=True).items():
+    fields = data.model_dump(exclude_unset=True)
+    if "win_rate_pct" in fields:
+        reward.win_rate = round(fields.pop("win_rate_pct") / 100, 4)
+    for key, value in fields.items():
         setattr(reward, key, value)
     reward.updated_by = admin_id
     reward.updated_at = _utcnow()

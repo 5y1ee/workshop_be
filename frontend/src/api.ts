@@ -109,6 +109,28 @@ export interface Reward {
   description: string | null
   total_count: number
   image_url: string | null
+  win_rate: number
+  is_revealed: boolean
+}
+
+export interface RewardWithClaims extends Reward {
+  claimed_count: number
+  remaining_count: number
+  my_claimed: boolean
+}
+
+export interface RewardClaimDetail {
+  id: number
+  reward_id: number
+  user_id: number
+  nickname: string
+  claimed_at: string
+}
+
+export interface GachaPullResponse {
+  is_win: boolean
+  reward: Reward | null
+  remaining_point: number
 }
 
 export interface GameResult {
@@ -254,7 +276,11 @@ export const api = {
   seasonMembers: (token: string, seasonId: number) =>
     request<SeasonMembership[]>(`/api/seasons/${seasonId}/members`, token),
   rewards: (token: string, seasonId: number) =>
-    request<Reward[]>(`/api/seasons/${seasonId}/rewards`, token),
+    request<RewardWithClaims[]>(`/api/seasons/${seasonId}/rewards`, token),
+  gachaPull: (token: string, seasonId: number) =>
+    request<GachaPullResponse>(`/api/gacha/pull?season_id=${seasonId}`, token, {
+      method: 'POST',
+    }),
   results: (token: string, sessionId: number) =>
     request<GameResult[]>(`/api/sessions/${sessionId}/results`, token),
   games: (token: string) => request<Game[]>('/api/games', token),
@@ -423,14 +449,25 @@ export const api = {
   createReward: (
     token: string,
     seasonId: number,
-    body: { name: string; description?: string | null; total_count: number; image_url?: string | null },
+    body: { name: string; description?: string | null; total_count: number; image_url?: string | null; win_rate_pct?: number },
   ) =>
     request<Reward>(`/api/seasons/${seasonId}/rewards`, token, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  updateReward: (
+    token: string,
+    rewardId: number,
+    body: { name?: string; total_count?: number; image_url?: string | null; win_rate_pct?: number },
+  ) =>
+    request<Reward>(`/api/rewards/${rewardId}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   deleteReward: (token: string, rewardId: number) =>
     request<void>(`/api/rewards/${rewardId}`, token, { method: 'DELETE' }),
+  rewardClaims: (token: string, rewardId: number) =>
+    request<RewardClaimDetail[]>(`/api/rewards/${rewardId}/claims`, token),
 }
 
 export function wsUrl(token: string): string {

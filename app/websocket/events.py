@@ -231,6 +231,44 @@ async def broadcast_tap_submitted(
     )
 
 
+async def broadcast_reward_claimed(
+    reward_id: int,
+    reward_name: str,
+    user_id: int,
+    nickname: str,
+    claimed_count: int,
+    total_count: int,
+) -> None:
+    """리워드 수령을 전체 접속자에게 브로드캐스트 (도감 실시간 업데이트)."""
+    await manager.broadcast(
+        {
+            "type": "reward_claimed",
+            "reward_id": reward_id,
+            "reward_name": reward_name,
+            "user_id": user_id,
+            "nickname": nickname,
+            "claimed_count": claimed_count,
+            "remaining_count": total_count - claimed_count,
+        }
+    )
+
+
+async def broadcast_reward_unclaimed(
+    reward_id: int,
+    claimed_count: int,
+    total_count: int,
+) -> None:
+    """리워드 수령 취소를 전체 접속자에게 브로드캐스트."""
+    await manager.broadcast(
+        {
+            "type": "reward_unclaimed",
+            "reward_id": reward_id,
+            "claimed_count": claimed_count,
+            "remaining_count": total_count - claimed_count,
+        }
+    )
+
+
 async def broadcast_roulette_result(
     session_id: int, nonce: int, selected_index: int, selected: str
 ) -> None:

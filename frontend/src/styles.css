@@ -663,6 +663,8 @@ button:disabled {
 .dexcell .dexno { font-size: 9px; color: var(--muted); }
 .dexcell.locked { background: #2b3240; color: #59617a; }
 .dexcell.locked .nm { color: #59617a; }
+.dexcell.mine { border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(255,180,0, 0.4); }
+.dexcell.others { opacity: 0.38; filter: grayscale(60%); }
 
 .modal {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);

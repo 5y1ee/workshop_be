@@ -19,6 +19,7 @@ import {
   ApiError,
   type Game,
   type Reward,
+  type RewardClaimDetail,
   type SeasonMembership,
   type Team,
   type TimetableEntry,
@@ -295,7 +296,10 @@ export default function AdminPage({ onClose }: Props) {
 
   // ---------- 리워드 도감 ----------
   const [rewards, setRewards] = useState<Reward[]>([])
-  const [nr, setNr] = useState({ name: '', total_count: '1', image_url: '' })
+  const [nr, setNr] = useState({ name: '', total_count: '1', image_url: '', win_rate_pct: '10' })
+  const [claimsMap, setClaimsMap] = useState<Record<number, RewardClaimDetail[]>>({})
+  const [openClaimsId, setOpenClaimsId] = useState<number | null>(null)
+  const [editRate, setEditRate] = useState<{ id: number; value: string } | null>(null)
 
   const loadRewards = useCallback(() => {
     if (seasonId == null) {
@@ -314,8 +318,9 @@ export default function AdminPage({ onClose }: Props) {
         name: nr.name.trim(),
         total_count: Number(nr.total_count) || 1,
         image_url: nr.image_url.trim() || null,
+        win_rate_pct: Number(nr.win_rate_pct) || 0,
       })
-      setNr({ name: '', total_count: '1', image_url: '' })
+      setNr({ name: '', total_count: '1', image_url: '', win_rate_pct: '10' })
       loadRewards()
     })
 
@@ -324,6 +329,23 @@ export default function AdminPage({ onClose }: Props) {
       await api.deleteReward(t, id)
       loadRewards()
     })
+
+  const saveRate = (id: number) =>
+    run(async () => {
+      await api.updateReward(t, id, { win_rate_pct: Number(editRate?.value) || 0 })
+      setEditRate(null)
+      loadRewards()
+    })
+
+  const toggleClaims = async (rewardId: number) => {
+    if (openClaimsId === rewardId) {
+      setOpenClaimsId(null)
+      return
+    }
+    const claims = await api.rewardClaims(t, rewardId).catch(() => [])
+    setClaimsMap((prev) => ({ ...prev, [rewardId]: claims }))
+    setOpenClaimsId(rewardId)
+  }
 
   const gameTitle = (id: number) => games.find((g) => g.id === id)?.title ?? `게임 #${id}`
   const teamName2 = (id: number | null) =>
@@ -538,7 +560,7 @@ export default function AdminPage({ onClose }: Props) {
 
           {/* ⑤ 리워드 도감 */}
           <h3 className="sec-title">⑤ 리워드 도감</h3>
-          <div className="op-row" style={{ marginBottom: 10 }}>
+          <div className="op-row" style={{ marginBottom: 6 }}>
             <input
               placeholder="상품명"
               value={nr.name}
@@ -548,8 +570,18 @@ export default function AdminPage({ onClose }: Props) {
               className="op-score"
               type="number"
               placeholder="수량"
+              min={1}
               value={nr.total_count}
               onChange={(e) => setNr({ ...nr, total_count: e.target.value })}
+            />
+            <input
+              className="op-score"
+              type="number"
+              placeholder="확률(%)"
+              min={0}
+              max={100}
+              value={nr.win_rate_pct}
+              onChange={(e) => setNr({ ...nr, win_rate_pct: e.target.value })}
             />
             <button className="op-btn" disabled={busy} onClick={addReward}>
               추가
@@ -557,21 +589,61 @@ export default function AdminPage({ onClose }: Props) {
           </div>
           <div className="op-row" style={{ marginBottom: 10 }}>
             <input
-              placeholder="이미지 URL (있으면 공개, 없으면 실루엣)"
+              placeholder="이미지 URL (선택)"
               value={nr.image_url}
               onChange={(e) => setNr({ ...nr, image_url: e.target.value })}
             />
           </div>
           <div className="admin-list">
             {rewards.map((r) => (
-              <div key={r.id} className="admin-row">
-                <span className="row-main">
-                  <b>{r.image_url ? '🎁' : '❓'} {r.name}</b>
-                  <span className="chip">{r.total_count}개</span>
-                </span>
-                <button className="mini-btn danger" disabled={busy} onClick={() => removeReward(r.id)}>
-                  삭제
-                </button>
+              <div key={r.id} style={{ marginBottom: 4 }}>
+                <div className="admin-row">
+                  <span className="row-main">
+                    <b>{r.is_revealed ? '🎁' : '❓'} {r.name}</b>
+                    <span className="chip">{r.total_count}개</span>
+                    <span className="chip">{Math.round((r.win_rate ?? 0) * 100)}%</span>
+                  </span>
+                  <button className="mini-btn ghost" onClick={() => setEditRate(editRate?.id === r.id ? null : { id: r.id, value: String(Math.round((r.win_rate ?? 0) * 100)) })}>
+                    확률
+                  </button>
+                  <button className="mini-btn" onClick={() => toggleClaims(r.id)}>
+                    당첨자 {openClaimsId === r.id ? '▲' : '▼'}
+                  </button>
+                  <button className="mini-btn danger" disabled={busy} onClick={() => removeReward(r.id)}>
+                    삭제
+                  </button>
+                </div>
+                {editRate?.id === r.id && (
+                  <div className="op-row" style={{ padding: '6px 12px', background: '#f0f4ff', borderRadius: 8, marginTop: 2, gap: 6 }}>
+                    <span className="muted" style={{ fontSize: 13 }}>당첨 확률</span>
+                    <input
+                      className="op-score"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editRate.value}
+                      onChange={(e) => setEditRate({ id: r.id, value: e.target.value })}
+                      style={{ width: 70 }}
+                    />
+                    <span className="muted">%</span>
+                    <button className="mini-btn" disabled={busy} onClick={() => saveRate(r.id)}>저장</button>
+                    <button className="mini-btn ghost" onClick={() => setEditRate(null)}>취소</button>
+                  </div>
+                )}
+                {openClaimsId === r.id && (
+                  <div style={{ padding: '6px 12px', background: '#f8f9fb', borderRadius: 8, marginTop: 2, fontSize: 13 }}>
+                    {(claimsMap[r.id] ?? []).length === 0 ? (
+                      <p className="muted" style={{ margin: 0 }}>아직 당첨자가 없습니다.</p>
+                    ) : (
+                      (claimsMap[r.id] ?? []).map((c) => (
+                        <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <span>🎉 {c.nickname}</span>
+                          <span className="muted">{new Date(c.claimed_at).toLocaleString('ko-KR')}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
