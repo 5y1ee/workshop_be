@@ -11,16 +11,18 @@ import { useSeason } from '../season'
 import { useLive } from '../live'
 import GameDetail from './GameDetail'
 
-const GAME_MARKERS: Record<number, { x: string; y: string; image: string; size?: string }> = {
-  1: { x: '50%', y: '87%', image: 'charades.png', size: '96px' },
-  2: { x: '25%', y: '75%', image: 'quiz-battle.png', size: '90px' },
-  3: { x: '67%', y: '66%', image: 'song-quiz.png', size: '92px' },
-  4: { x: '26%', y: '56%', image: 'treasure-hunt.png', size: '92px' },
-  5: { x: '65%', y: '47%', image: 'relay-game.png', size: '92px' },
-  6: { x: '24%', y: '37%', image: 'triathlon.png', size: '92px' },
-  7: { x: '67%', y: '27%', image: 'shoe-throw.png', size: '90px' },
-  8: { x: '25%', y: '17%', image: 'zombie-game.png', size: '90px' },
-  9: { x: '51%', y: '8%', image: 'button-challenge.png', size: '96px' },
+const MARKER_SIZE = '40vw'
+
+const GAME_MARKERS: Record<number, { x: string; y: string; image: string }> = {
+  1: { x: '55%', y: '89%', image: 'charades.png' },
+  2: { x: '25%', y: '78%', image: 'quiz-battle.png' },
+  3: { x: '72%', y: '70%', image: 'song-quiz.png' },
+  4: { x: '38%', y: '60%', image: 'treasure-hunt.png' },
+  5: { x: '78%', y: '47%', image: 'relay-game.png' },
+  6: { x: '24%', y: '44%', image: 'triathlon.png' },
+  7: { x: '73%', y: '27%', image: 'shoe-throw.png' },
+  8: { x: '25%', y: '25%', image: 'zombie-game.png' },
+  9: { x: '51%', y: '10%', image: 'button-challenge.png' },
 }
 
 export default function MainPage() {
@@ -96,7 +98,7 @@ export default function MainPage() {
           <button
             key={e.id}
             className={`gym-marker${done ? ' done' : ''}${live ? ' live' : ''}`}
-            style={{ left: marker.x, top: marker.y, '--marker-size': marker.size ?? '92px' } as CSSProperties}
+            style={{ left: marker.x, top: marker.y, '--marker-size': MARKER_SIZE } as CSSProperties}
             onClick={() => setSelected(e)}
             aria-label={label}
           >

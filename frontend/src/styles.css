@@ -58,7 +58,7 @@ body {
 
 /* ---------- 메인 ---------- */
 .main {
-  min-height: 100vh;
+  min-height: 130vh;
   overflow: hidden;
   background-color: #b9e8ff;
   background-image: url('/images/main-bg.png');
@@ -550,15 +550,36 @@ button:disabled {
 }
 
 .gym-marker.done img {
-  opacity: 0.72;
-  filter: grayscale(0.25) drop-shadow(0 4px 7px rgba(43, 49, 67, 0.22));
+  opacity: 0.55;
+  filter: grayscale(0.6) drop-shadow(0 4px 7px rgba(43, 49, 67, 0.22));
+}
+
+@keyframes marker-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes marker-glow-pulse {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 217, 92, 0.8))
+      drop-shadow(0 0 18px rgba(255, 180, 0, 0.5))
+      drop-shadow(0 7px 10px rgba(43, 49, 67, 0.28));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 14px rgba(255, 217, 92, 1))
+      drop-shadow(0 0 32px rgba(255, 180, 0, 0.85))
+      drop-shadow(0 7px 10px rgba(43, 49, 67, 0.28));
+  }
 }
 
 .gym-marker.live img {
-  filter:
-    drop-shadow(0 0 8px rgba(255, 217, 92, 0.95))
-    drop-shadow(0 7px 10px rgba(43, 49, 67, 0.28));
+  animation:
+    marker-float 2s ease-in-out infinite,
+    marker-glow-pulse 1.6s ease-in-out infinite;
 }
+
 
 .gym-title {
   max-width: calc(var(--marker-size) + 34px);
@@ -585,13 +606,15 @@ button:disabled {
 .gym-marker.live .gym-title {
   background: rgba(122, 85, 4, 0.82);
   color: #fff4bf;
+  animation: title-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes title-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 @media (max-width: 480px) {
-  .gym-marker {
-    width: min(var(--marker-size), 20vw);
-  }
-
   .gym-title {
     max-width: 25vw;
     font-size: 10px;
