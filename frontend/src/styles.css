@@ -58,11 +58,14 @@ body {
 
 /* ---------- 메인 ---------- */
 .main {
-  height: 100vh;
-  background-image: url('/images/progress-bg.png');
+  min-height: 100vh;
+  overflow: hidden;
+  background-color: #b9e8ff;
+  background-image: url('/images/main-bg.png');
   background-size: cover;
-  background-position: center -30px;
+  background-position: center top;
   position: relative;
+  padding: 0;
 }
 
 /* .main::before {
@@ -505,27 +508,96 @@ button:disabled {
 /* ---------- 맵 체육관 마커 ---------- */
 .gym-marker {
   position: absolute;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: var(--marker-size);
+  min-width: 0;
+  padding: 0;
+  gap: 3px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
   cursor: pointer;
   z-index: 10;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gym-marker img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 5px 8px rgba(43, 49, 67, 0.26));
+  transition:
+    transform 0.16s ease,
+    filter 0.16s ease,
+    opacity 0.16s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.gym-marker:hover img {
+  transform: translateY(-3px) scale(1.04);
+  filter: drop-shadow(0 8px 12px rgba(43, 49, 67, 0.32));
+}
+
+.gym-marker:active img {
+  transform: translateY(0) scale(0.98);
+}
+
+.gym-marker.done img {
+  opacity: 0.72;
+  filter: grayscale(0.25) drop-shadow(0 4px 7px rgba(43, 49, 67, 0.22));
+}
+
+.gym-marker.live img {
+  filter:
+    drop-shadow(0 0 8px rgba(255, 217, 92, 0.95))
+    drop-shadow(0 7px 10px rgba(43, 49, 67, 0.28));
 }
 
 .gym-title {
-  font-size: 13px;
+  max-width: calc(var(--marker-size) + 34px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
   font-weight: 800;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+  line-height: 1.15;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   white-space: nowrap;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 2px 10px;
+  background: rgba(21, 33, 55, 0.72);
+  padding: 3px 8px;
   border-radius: 999px;
+  pointer-events: none;
 }
 
-.gym-marker.done .gym-title { color: #a8f0c6; }
-.gym-marker.live .gym-title { color: #ffd76a; }
+.gym-marker.done .gym-title {
+  background: rgba(33, 105, 67, 0.78);
+  color: #e7fff0;
+}
+
+.gym-marker.live .gym-title {
+  background: rgba(122, 85, 4, 0.82);
+  color: #fff4bf;
+}
+
+@media (max-width: 480px) {
+  .gym-marker {
+    width: min(var(--marker-size), 20vw);
+  }
+
+  .gym-title {
+    max-width: 25vw;
+    font-size: 10px;
+    padding-inline: 6px;
+  }
+}
 
 .progress { font-size: 12px; font-weight: 700; margin-bottom: 12px; }
 .progress .bar { height: 8px; background: #eef1f6; border-radius: 999px; margin-top: 5px; overflow: hidden; }
