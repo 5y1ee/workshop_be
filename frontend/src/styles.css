@@ -1145,7 +1145,7 @@ button:disabled {
 /* dex-card(relative) 기준으로 절대 위치 */
 .dex-avatar-anchor {
   position: absolute;
-  top: 148px;   /* 헤더 252px 기준 → 중심이 경계선(252px)에 오도록: 252 - 70 = 182 */
+  top: 168px;   /* 헤더 252px 기준 → 중심이 경계선(252px)에 오도록: 252 - 70 = 182 */
   left: 0;
   right: 0;
   display: flex;
