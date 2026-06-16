@@ -11,7 +11,7 @@ import { useAuth } from '../auth'
 import { useSeason } from '../season'
 import { useLive } from '../live'
 
-export default function MyPage() {
+export default function MyPage({ onBack }: { onBack?: () => void }) {
   const { token, user } = useAuth()
   const t = token as string
   const { seasonId } = useSeason()
@@ -23,13 +23,12 @@ export default function MyPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [scoreboard, setScoreboard] = useState<TeamScore[]>([])
   const [userScoreboard, setUserScoreboard] = useState<UserScore[]>([])
+  const [activeTab, setActiveTab] = useState<'stats' | 'party'>('stats')
 
-  // 내 프로필 (profile_image 포함)
   useEffect(() => {
     api.me(t).then(setProfile).catch(() => setProfile(null))
   }, [t])
 
-  // 선택 시즌에서의 내 팀 (시즌이 바뀌면 따라 바뀐다)
   useEffect(() => {
     if (seasonId == null) return
     setTeamId(null)
@@ -44,13 +43,11 @@ export default function MyPage() {
       .catch(() => setTeamId(null))
   }, [t, seasonId])
 
-  // 팀원
   useEffect(() => {
     if (teamId == null) return
     api.teamMembers(t, teamId).then(setMembers).catch(() => setMembers([]))
   }, [t, teamId])
 
-  // 시즌 누적 점수 (팀 순위/총점)
   const loadScoreboard = () => {
     if (seasonId == null) return
     api.seasonScoreboard(t, seasonId).then(setScoreboard).catch(() => setScoreboard([]))
@@ -70,76 +67,174 @@ export default function MyPage() {
   const myPoint = me?.point ?? profile?.point ?? 0
   const myProfileImage = profile?.profile_image ?? me?.profile_image ?? null
 
+  const maxTeamScore = Math.max(...scoreboard.map((s) => s.total_score), 1)
+  const maxUserScore = Math.max(...userScoreboard.map((s) => s.total_score), 1)
+  const teamRankPct =
+    myRankIdx >= 0 && scoreboard.length > 1
+      ? ((scoreboard.length - 1 - myRankIdx) / (scoreboard.length - 1)) * 100
+      : myRankIdx === 0 ? 100 : 0
+  const userRankPct =
+    myUserRankIdx >= 0 && userScoreboard.length > 1
+      ? ((userScoreboard.length - 1 - myUserRankIdx) / (userScoreboard.length - 1)) * 100
+      : myUserRankIdx === 0 ? 100 : 0
+  const teamScorePct = Math.min((myTeamScore / maxTeamScore) * 100, 100)
+  const userScorePct = Math.min((myUserScore / maxUserScore) * 100, 100)
+  const pointPct = Math.min((myPoint / Math.max(maxUserScore, myPoint, 1)) * 100, 100)
+
+  const membersByPoint = [...members].sort((a, b) => (b.point ?? 0) - (a.point ?? 0))
+  const MEMBER_COLORS = [
+    { bg: '#fde7e7', border: '#ee1515' },
+    { bg: '#e3f6ec', border: '#2dc35b' },
+    { bg: '#e8f3ff', border: '#2a75bb' },
+    { bg: '#fff8e6', border: '#f0c040' },
+  ]
+  const getMemberColor = (memberId: number) => {
+    const rank = membersByPoint.findIndex((m) => m.id === memberId)
+    return MEMBER_COLORS[Math.min(rank, MEMBER_COLORS.length - 1)]
+  }
+
   return (
-    <div className="page">
-      <div className="trainer">
-        <div className="flex">
+    <div className="page dex-page">
+      <div className="dex-card">
+        {/* Teal header */}
+        <div className="dex-header">
+          <div className="dex-ball-bg" />
+          <div className="dex-header-nav">
+            <button className="dex-back-btn" onClick={onBack} aria-label="뒤로가기">
+              <i className="fa-solid fa-arrow-left-long" />
+            </button>
+          </div>
+          <div className="dex-header-top">
+            <div>
+              <h2 className="dex-name">{user?.nickname ?? '트레이너'}</h2>
+              <div className="dex-badges">
+                {teamName && <span className="dex-badge">{teamName}</span>}
+                <span className="dex-badge">
+                  {user?.role === 'admin' ? '운영자' : '트레이너'}
+                </span>
+              </div>
+            </div>
+            <span className="dex-number">
+              {myRankIdx >= 0 ? `#${String(myRankIdx + 1).padStart(3, '0')}` : '#—'}
+            </span>
+          </div>
+        </div>
+
+        {/* Avatar floats between header and white card */}
+        <div className="dex-avatar-anchor">
           <ProfileFace
-            className="avatar"
+            className="dex-avatar"
             profileImage={myProfileImage}
             fallback={user?.role === 'admin' ? '🧑‍✈️' : '🧑'}
             alt={user?.nickname ?? '프로필'}
           />
-          <div>
-            <div className="t-name">{user?.nickname}</div>
-            <span className="pill team">
-              {teamName ? `${teamName} · ` : ''}
-              {user?.role === 'admin' ? '운영자' : '트레이너'}
-            </span>
-          </div>
         </div>
-        <div className="stat-row">
-          <div className="stat">
-            <div className="n">{myPoint}</div>
-            <div className="l">내 포인트</div>
+
+        {/* White card */}
+        <div className="dex-white">
+          <div className="dex-tabs">
+            <button
+              className={`dex-tab${activeTab === 'stats' ? ' active' : ''}`}
+              onClick={() => setActiveTab('stats')}
+            >
+              내 스탯
+            </button>
+            <button
+              className={`dex-tab${activeTab === 'party' ? ' active' : ''}`}
+              onClick={() => setActiveTab('party')}
+            >
+              내 파티
+            </button>
           </div>
-          <div className="stat">
-            <div className="n">{myRankIdx >= 0 ? `${myRankIdx + 1}위` : '—'}</div>
-            <div className="l">팀 순위</div>
-          </div>
-          <div className="stat">
-            <div className="n">{myTeamScore}</div>
-            <div className="l">팀 총점</div>
-          </div>
-          <div className="stat">
-            <div className="n">{myUserRankIdx >= 0 ? `${myUserRankIdx + 1}위` : '—'}</div>
-            <div className="l">개인 순위</div>
-          </div>
-          <div className="stat">
-            <div className="n">{myUserScore}</div>
-            <div className="l">개인 총점</div>
+
+          <div className="dex-content">
+            {activeTab === 'stats' ? (
+              <div className="dex-stats">
+                <DexStat label="내 포인트" value={myPoint} pct={pointPct} colorClass="fill-green" />
+                <DexStat
+                  label="팀 순위"
+                  value={myRankIdx >= 0 ? `${myRankIdx + 1}위` : '—'}
+                  pct={teamRankPct}
+                  colorClass="fill-blue"
+                />
+                <DexStat
+                  label="팀 총점"
+                  value={myTeamScore}
+                  pct={teamScorePct}
+                  colorClass="fill-teal"
+                />
+                <DexStat
+                  label="개인 순위"
+                  value={myUserRankIdx >= 0 ? `${myUserRankIdx + 1}위` : '—'}
+                  pct={userRankPct}
+                  colorClass="fill-blue"
+                />
+                <DexStat
+                  label="개인 총점"
+                  value={myUserScore}
+                  pct={userScorePct}
+                  colorClass="fill-green"
+                />
+              </div>
+            ) : teamId == null ? (
+              <p className="muted" style={{ textAlign: 'center', padding: '20px 0' }}>
+                아직 팀에 배정되지 않았습니다
+              </p>
+            ) : members.length === 0 ? (
+              <p className="muted" style={{ textAlign: 'center', padding: '20px 0' }}>
+                팀원이 없습니다.
+              </p>
+            ) : (
+              <div className="dex-party">
+                {members.map((m) => {
+                  const color = getMemberColor(m.id)
+                  return (
+                    <div
+                      key={m.id}
+                      className={`dex-member${m.id === user?.user_id ? ' me' : ''}`}
+                      style={{ background: color.bg, borderColor: color.border }}
+                    >
+                      <ProfileFace
+                        className="dex-member-face"
+                        profileImage={m.profile_image}
+                        fallback={m.role === 'admin' ? '🧑‍✈️' : '🧑'}
+                        alt={m.nickname}
+                      />
+                      <div className="dex-member-name">{m.nickname}</div>
+                      <div className="dex-member-pt">{m.point ?? 0}</div>
+                      <span className="dex-member-role">
+                        {m.role === 'admin' ? '운영자' : '트레이너'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  )
+}
 
-      {teamId == null ? (
-        <p className="muted" style={{ marginTop: 16 }}>
-          아직 팀에 배정되지 않았습니다. 운영자가 팀을 배정하면 파티가 표시됩니다.
-        </p>
-      ) : (
-        <>
-          <h3 className="sec-title">내 파티 {teamName ? `(${teamName})` : ''}</h3>
-          {members.length === 0 ? (
-            <p className="muted">팀원이 없습니다.</p>
-          ) : (
-            <div className="party">
-              {members.map((m) => (
-                <div key={m.id} className={`slot${m.id === user?.user_id ? ' me' : ''}`}>
-                  <ProfileFace
-                    className="face"
-                    profileImage={m.profile_image}
-                    fallback={m.role === 'admin' ? '🧑‍✈️' : '🧑'}
-                    alt={m.nickname}
-                  />
-                  {m.nickname}
-                  <br />
-                  <b>{m.point}</b>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+function DexStat({
+  label,
+  value,
+  pct,
+  colorClass,
+}: {
+  label: string
+  value: string | number
+  pct: number
+  colorClass: string
+}) {
+  return (
+    <div className="dex-stat">
+      <span className="dex-stat-label">{label}</span>
+      <span className="dex-stat-value">{value}</span>
+      <div className="dex-stat-bar">
+        <div className={`dex-stat-fill ${colorClass}`} style={{ width: `${Math.max(pct, 4)}%` }} />
+      </div>
     </div>
   )
 }

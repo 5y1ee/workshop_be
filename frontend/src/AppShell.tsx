@@ -30,7 +30,7 @@ export default function AppShell() {
   return (
     <div className="shell">
       <header className="shell-top">
-        <span className="shell-greet">👋 {user?.nickname}</span>
+        <span className="shell-greet">🧢 {user?.nickname}</span>
         <select
           className="season-switch"
           value={seasonId ?? ''}
@@ -68,7 +68,7 @@ export default function AppShell() {
           </p>
         ) : (
           <>
-            {tab === 'my' && <MyPage />}
+            {tab === 'my' && <MyPage onBack={() => setTab('main')} />}
             {tab === 'ranking' && <RankingPage />}
             {tab === 'main' && <MainPage />}
             {tab === 'dex' && <DexPage />}

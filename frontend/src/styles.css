@@ -173,7 +173,6 @@ button {
   color: #fff;
   background: var(--primary);
   border: none;
-  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -422,30 +421,89 @@ button:disabled {
 }
 .shell-top {
   flex: none;
-  background: var(--poke-red);
+  background: linear-gradient(135deg, #b80f0f 0%, var(--poke-red) 50%, #cc1212 100%);
   color: #fff;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 9px 12px;
+  border-bottom: 3px solid #111;
+  box-shadow: 0 3px 0 var(--poke-yellow), 0 6px 0 #111, 0 6px 12px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 20;
 }
-.shell-greet { font-weight: 800; font-size: 14px; white-space: nowrap; }
+
+.shell-greet {
+  font-weight: 900;
+  font-size: 14px;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  letter-spacing: -0.2px;
+}
+
 .season-switch {
   width: auto;
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 5px 10px;
   font-size: 12px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.16);
+  font-weight: 700;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.18);
   color: #fff;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: center;
 }
 .season-switch option { color: #1f2430; }
-.shell-top .live { margin-left: 0; }
-.shell-top .live.on { color: #fff; background: rgba(255, 255, 255, 0.22); }
-.shell-top .live.off { color: #ffe0e0; background: rgba(0, 0, 0, 0.12); }
-.shell-top .link { color: #fff; opacity: 0.9; }
+
+.shell-top .live {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  border: 1.5px solid transparent;
+}
+.shell-top .live.on {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+  animation: live-badge-glow 2s ease-in-out infinite;
+}
+.shell-top .live.off {
+  color: rgba(255, 210, 210, 0.75);
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+@keyframes live-badge-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 203, 5, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 203, 5, 0); }
+}
+
+.shell-top .link {
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.shell-top .link:active {
+  background: rgba(0, 0, 0, 0.32);
+}
 .shell-main { flex: 1; overflow-y: auto; background: #f7f8fb; }
 .shell-main::-webkit-scrollbar { width: 0; }
 
@@ -965,3 +1023,341 @@ button:disabled {
 
 /* ---- round operator select ---- */
 .op-select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; background: #fff; flex: 1; }
+
+/* ===================================================================
+   MyPage — Pokédex 상세 스타일 (이미지 헤더 + 흰 카드 오버랩)
+   =================================================================== */
+
+/* .page 의 padding 을 무력화 */
+.dex-page {
+  padding: 0;
+  background: #f7f9fb;
+}
+
+/* 전체 카드 — 상대 위치 기준점 (아바타 절대 위치용) */
+.dex-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: linear-gradient(160deg, #5dd5b0 0%, #3dbe98 100%);
+}
+
+/* ── 민트 그라디언트 헤더 ── */
+.dex-header {
+  background: linear-gradient(160deg, #5dd5b0 0%, #3dbe98 100%);
+  height: 330px;           /* 고정 높이 — 아바타 앵커 계산 기준 */
+  padding: 20px 20px 0;
+  position: relative;
+  overflow: hidden;        /* 포켓볼 워터마크 클리핑 */
+  flex-shrink: 0;
+}
+
+/* 포켓볼 워터마크 (우측 하단) */
+.dex-ball-bg {
+  position: absolute;
+  right: -32px;
+  bottom: -32px;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  border: 42px solid rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+.dex-ball-bg::after {
+  content: '';
+  position: absolute;
+  inset: 28px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.12);
+}
+
+.dex-header-nav {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.dex-back-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.dex-back-btn:active {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.dex-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
+}
+
+.dex-name {
+  color: #fff;
+  font-size: 26px;
+  font-weight: 900;
+  margin: 0 0 10px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.dex-number {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  padding-top: 5px;
+}
+
+.dex-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dex-badge {
+  display: inline-block;
+  padding: 3px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── 아바타 앵커: 헤더와 흰 카드 경계에 떠 있음 ── */
+/* dex-card(relative) 기준으로 절대 위치 */
+.dex-avatar-anchor {
+  position: absolute;
+  top: 148px;   /* 헤더 252px 기준 → 중심이 경계선(252px)에 오도록: 252 - 70 = 182 */
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.dex-avatar {
+  width: 50vw;
+  pointer-events: auto;
+}
+
+.dex-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── 흰 카드 (아바타 아래 70px 위에서 시작) ── */
+.dex-white {
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  flex: 1;
+  /* 아바타 중심이 top:160 + 70px = 230px(헤더 끝)에 위치
+     아바타 하단: 160 + 140 = 300px → 흰 카드 상단(230px)에서 70px 내려온 곳
+     padding-top = 70px + 여백 16px = 86px */
+  padding-top: 86px;
+  position: relative;
+  z-index: 1;
+  margin-top: 0;
+}
+
+/* ── 탭 바 ── */
+.dex-tabs {
+  display: flex;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dex-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  padding: 12px 0 13px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s;
+}
+
+.dex-tab.active {
+  color: #3dbe98;
+  border-bottom-color: #3dbe98;
+}
+
+/* ── 탭 콘텐츠 ── */
+.dex-content {
+  padding: 18px 24px 28px;
+}
+
+/* Stats */
+.dex-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  padding: 20px;
+}
+
+.dex-stat {
+  display: grid;
+  grid-template-columns: 72px 48px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.dex-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.dex-stat-value {
+  font-weight: 800;
+  font-size: 14px;
+  text-align: right;
+}
+
+.dex-stat-bar {
+  height: 6px;
+  background: #eef1f6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.dex-stat-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.fill-green  { background: #2dc35b; }
+.fill-teal   { background: #3dbe98; }
+.fill-blue   { background: #2a75bb; }
+.fill-yellow { background: #f0c040; }
+.fill-red    { background: #ee4444; }
+
+/* Party grid */
+.dex-party {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 20px;
+  padding-top: 24px;
+  gap: 14px 8px;
+}
+
+.dex-member {
+  border-radius: 14px;
+  border: 2px solid transparent;
+  padding: 10px 6px 9px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.dex-member.me {
+  border-color: #3dbe98;
+  transform: translateY(-3px);
+  box-shadow:
+    0 0 0 3px rgba(61, 190, 152, 0.25),
+    0 8px 20px rgba(61, 190, 152, 0.3);
+  animation: me-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes me-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(61, 190, 152, 0.25),
+      0 8px 20px rgba(61, 190, 152, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(61, 190, 152, 0.12),
+      0 10px 26px rgba(61, 190, 152, 0.4);
+  }
+}
+
+.dex-member.me::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3dbe98;
+  box-shadow: 0 0 0 2px rgba(61, 190, 152, 0.3);
+  animation: dot-ping 2.2s ease-in-out infinite;
+}
+
+@keyframes dot-ping {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(61, 190, 152, 0.3); }
+  50%       { box-shadow: 0 0 0 4px rgba(61, 190, 152, 0); }
+}
+
+.dex-member-face {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  overflow: hidden;
+  margin-bottom: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dex-member-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dex-member-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.dex-member-pt {
+  font-size: 15px;
+  font-weight: 900;
+  color: #1f2430;
+}
+
+.dex-member-role {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.4);
+  background: rgba(255, 255, 255, 0.6);
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-top: 1px;
+}
