@@ -283,6 +283,50 @@ async def test_list_and_update_score(client, admin_headers):
     assert res.json()["updated_at"] is not None
 
 
+async def _member_point(client, admin_headers, team_id: int, user_id: int) -> int:
+    res = await client.get(f"/api/teams/{team_id}/members", headers=admin_headers)
+    return next(m["point"] for m in res.json() if m["id"] == user_id)
+
+
+async def test_user_score_syncs_user_point(client, admin_headers):
+    session_id, team_id, user_id = await _setup(
+        client, admin_headers, participant_type="individual"
+    )
+    assert await _member_point(client, admin_headers, team_id, user_id) == 0
+
+    score_id = (
+        await client.post(
+            f"/api/sessions/{session_id}/scores",
+            json={"subject_type": "user", "subject_id": user_id, "score": 3},
+            headers=admin_headers,
+        )
+    ).json()["id"]
+    assert await _member_point(client, admin_headers, team_id, user_id) == 3
+
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 5},
+        headers=admin_headers,
+    )
+    assert await _member_point(client, admin_headers, team_id, user_id) == 8
+
+    # 점수 수정은 차액만 반영된다 (3 → 10, +7).
+    await client.patch(
+        f"/api/scores/{score_id}", json={"score": 10}, headers=admin_headers
+    )
+    assert await _member_point(client, admin_headers, team_id, user_id) == 15
+
+
+async def test_team_score_does_not_touch_user_point(client, admin_headers):
+    session_id, team_id, user_id = await _setup(client, admin_headers)
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "team", "subject_id": team_id, "score": 9},
+        headers=admin_headers,
+    )
+    assert await _member_point(client, admin_headers, team_id, user_id) == 0
+
+
 async def test_score_unknown_session_404(client, admin_headers):
     res = await client.post(
         "/api/sessions/99999999/scores",

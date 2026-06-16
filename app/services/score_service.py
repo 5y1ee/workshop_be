@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,17 @@ class DuplicateChatScore(Exception):
 
 class InvalidScoreTarget(Exception):
     """현재 세션/시즌에 점수를 줄 수 없는 대상."""
+
+
+async def _apply_user_point_delta(
+    db: AsyncSession, user_id: int, delta: int
+) -> None:
+    """개인 점수 로그 변동분을 users.point 누적값에 반영한다 (커밋은 호출부에서)."""
+    if delta == 0:
+        return
+    await db.execute(
+        update(User).where(User.id == user_id).values(point=User.point + delta)
+    )
 
 
 async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -> bool:
@@ -107,6 +118,8 @@ async def create_score(
         created_by=admin_id,
     )
     db.add(score)
+    if data.subject_type == "user":
+        await _apply_user_point_delta(db, data.subject_id, data.score)
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -137,10 +150,13 @@ async def get_score(db: AsyncSession, score_id: int) -> GameScoreLog | None:
 async def update_score(
     db: AsyncSession, score: GameScoreLog, data: ScoreUpdate, admin_id: int
 ) -> GameScoreLog:
+    old_score = score.score
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(score, key, value)
     score.updated_by = admin_id
     score.updated_at = _utcnow()
+    if score.subject_type == "user" and score.score != old_score:
+        await _apply_user_point_delta(db, score.subject_id, score.score - old_score)
     await db.commit()
     await db.refresh(score)
     return score
