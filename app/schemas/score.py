@@ -11,6 +11,7 @@ class ScoreCreate(BaseModel):
     subject_id: int
     score: int = 0
     memo: str | None = None
+    chat_log_id: int | None = None
 
 
 class ScoreUpdate(BaseModel):
@@ -25,6 +26,7 @@ class ScoreRead(BaseModel):
     session_id: int
     subject_type: str
     subject_id: int
+    chat_log_id: int | None
     score: int
     memo: str | None
     created_by: int

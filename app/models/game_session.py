@@ -84,6 +84,12 @@ class GameScoreLog(Base, TimestampMixin):
     subject_id: Mapped[int] = mapped_column(
         nullable=False, comment="subject_type에 따라 teams.id 또는 users.id"
     )
+    chat_log_id: Mapped[int | None] = mapped_column(
+        ForeignKey("game_chat_logs.id", name="fk_game_score_logs_chat_log"),
+        unique=True,
+        nullable=True,
+        comment="노래맞추기 정답 후보 채팅 로그 ID",
+    )
     score: Mapped[int] = mapped_column(
         server_default=text("0"), nullable=False, comment="획득 점수"
     )
