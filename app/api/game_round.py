@@ -12,7 +12,7 @@ from app.schemas.game_round import (
     RoundUpdate,
 )
 from app.services import game_round_service, game_session_service
-from app.services.game_round_service import RoundConflict
+from app.services.game_round_service import RoundConflict, RoundDeleteBlocked
 from app.websocket.events import (
     broadcast_session_state,
     broadcast_round_revealed,
@@ -106,6 +106,18 @@ async def update_round(
 ) -> GameRound:
     round_ = await _get_round_or_404(db, round_id)
     return await game_round_service.update_round(db, round_, payload, admin.id)
+
+
+@router.delete("/rounds/{round_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_round(round_id: int, db: DbSession, admin: AdminUser) -> None:
+    round_ = await _get_round_or_404(db, round_id)
+    try:
+        await game_round_service.delete_round(db, round_)
+    except RoundDeleteBlocked as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/rounds/{round_id}/open", response_model=RoundRead)

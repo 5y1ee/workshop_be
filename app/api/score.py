@@ -7,6 +7,7 @@ from app.schemas.score import (
     ScoreSummaryItem,
     ScoreUpdate,
     TeamScoreboardItem,
+    UserStatusItem,
     UserScoreboardItem,
 )
 from app.services import game_session_service, score_service
@@ -105,6 +106,17 @@ async def season_user_scoreboard(
 ) -> list[UserScoreboardItem]:
     """시즌 전체 개인 누적 점수 랭킹 (점수 0 배정 유저 포함, 내림차순)."""
     return await score_service.season_user_scoreboard(db, season_id)
+
+
+@router.get(
+    "/seasons/{season_id}/user-status",
+    response_model=list[UserStatusItem],
+)
+async def season_user_status(
+    season_id: int, db: DbSession, admin: AdminUser
+) -> list[UserStatusItem]:
+    """운영자용 사용자 현황: 전체 유저의 시즌 개인 누적점수와 현재 포인트."""
+    return await score_service.season_user_status(db, season_id)
 
 
 @router.patch("/scores/{score_id}", response_model=ScoreRead)

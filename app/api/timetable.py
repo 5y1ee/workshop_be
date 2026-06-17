@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.deps import AdminUser, CurrentUser, DbSession
 from app.schemas.timetable import TimetableCreate, TimetableRead, TimetableUpdate
 from app.services import game_service, season_service, timetable_service
+from app.websocket import events as ws_events
 
 router = APIRouter(tags=["timetable"])
 
@@ -37,7 +38,9 @@ async def create_timetable_entry(
             status_code=status.HTTP_404_NOT_FOUND, detail="시즌을 찾을 수 없습니다."
         )
     await _validate_game(db, payload.game_id)
-    return await timetable_service.create_entry(db, season_id, payload)
+    entry = await timetable_service.create_entry(db, season_id, payload)
+    await ws_events.broadcast_timetable_changed(season_id, entry.id, "created")
+    return entry
 
 
 @router.get("/seasons/{season_id}/timetable", response_model=list[TimetableRead])
@@ -61,7 +64,9 @@ async def update_timetable_entry(
     entry = await _get_entry_or_404(db, entry_id)
     if payload.game_id is not None:
         await _validate_game(db, payload.game_id)
-    return await timetable_service.update_entry(db, entry, payload, admin.id)
+    entry = await timetable_service.update_entry(db, entry, payload, admin.id)
+    await ws_events.broadcast_timetable_changed(entry.season_id, entry.id, "updated")
+    return entry
 
 
 @router.delete("/timetable/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -69,6 +74,7 @@ async def delete_timetable_entry(
     entry_id: int, db: DbSession, admin: AdminUser
 ) -> None:
     entry = await _get_entry_or_404(db, entry_id)
+    season_id = entry.season_id
     try:
         await timetable_service.delete_entry(db, entry)
     except timetable_service.TimetableDeleteBlocked as exc:
@@ -76,3 +82,4 @@ async def delete_timetable_entry(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+    await ws_events.broadcast_timetable_changed(season_id, entry_id, "deleted")
