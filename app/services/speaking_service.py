@@ -25,6 +25,10 @@ class SpeakingConflict(Exception):
     """발언권 이벤트 상태/참여/지급 충돌."""
 
 
+# speed 모드에서 신호 전에 누른 입력(부정출발)을 SpeakingSubmission.value 에 저장하는 센티넬.
+_SPEAKING_DQ = -1.0
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -138,6 +142,33 @@ async def record_once(
         event_id=event.id,
         user_id=user_id,
         value=value,
+        server_time=_utcnow(),
+    )
+    db.add(submission)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise SpeakingConflict("이미 제출했습니다.") from exc
+    await db.refresh(submission)
+    return submission
+
+
+async def record_disqualify(
+    db: AsyncSession, event: SpeakingEvent, user_id: int
+) -> SpeakingSubmission:
+    """speed 모드: 신호 전에 누른 부정출발을 실격(DQ)으로 1회 기록.
+
+    SpeakingSubmission 유니크 제약을 재사용해 멱등 처리하며, 한 번 실격되면
+    이후 정상 제출도 차단된다.
+    """
+    if event.status != "open" or event.mode != "speed":
+        raise SpeakingConflict("진행 중인 빠르기 대결이 아닙니다.")
+    await _require_member(db, event, user_id)
+    submission = SpeakingSubmission(
+        event_id=event.id,
+        user_id=user_id,
+        value=_SPEAKING_DQ,
         server_time=_utcnow(),
     )
     db.add(submission)
@@ -267,12 +298,22 @@ async def _speed_results(
         .order_by(SpeakingSubmission.value, SpeakingSubmission.server_time)
     )
     info = await _user_info(db, event.season_id)
-    results: list[SpeakingResult] = []
-    for rank, (user_id, value, _server_time) in enumerate(rows.all(), start=1):
-        u = info.get(
+    items = list(rows.all())
+    # 신호 전 입력으로 실격(DQ)된 제출은 순위에서 제외하고 뒤로 보낸다.
+    valid = [(uid, val) for uid, val, _st in items if val != _SPEAKING_DQ]
+    disqualified = [uid for uid, val, _st in items if val == _SPEAKING_DQ]
+
+    def _info(user_id: int) -> dict:
+        return info.get(
             user_id,
             {"nickname": f"user#{user_id}", "team_id": None, "team_name": None},
         )
+
+    results: list[SpeakingResult] = []
+    rank = 0
+    for user_id, value in valid:
+        rank += 1
+        u = _info(user_id)
         results.append(
             SpeakingResult(
                 user_id=user_id,
@@ -281,6 +322,20 @@ async def _speed_results(
                 team_name=u["team_name"],
                 value=float(value),
                 rank=rank,
+            )
+        )
+    for user_id in disqualified:
+        rank += 1
+        u = _info(user_id)
+        results.append(
+            SpeakingResult(
+                user_id=user_id,
+                nickname=u["nickname"],
+                team_id=u["team_id"],
+                team_name=u["team_name"],
+                value=0.0,
+                rank=rank,
+                disqualified=True,
             )
         )
     return results
@@ -328,6 +383,8 @@ async def grant_speaking_right(
     result = next((r for r in await get_results(db, event) if r.user_id == user_id), None)
     if result is None:
         raise SpeakingConflict("결과에 없는 유저에게 발언권을 부여할 수 없습니다.")
+    if result.disqualified:
+        raise SpeakingConflict("실격한 유저에게는 발언권을 부여할 수 없습니다.")
 
     grant = SpeakingGrant(
         event_id=event.id,
@@ -375,7 +432,7 @@ async def speaking_progress_loop(event_id: int, duration: int) -> None:
 
 
 async def send_signal_after_delay(event_id: int) -> None:
-    delay = random.uniform(1.0, 3.0)
+    delay = random.uniform(3.0, 5.0)
     await asyncio.sleep(delay)
     from app.websocket.events import broadcast_speaking_signal
 

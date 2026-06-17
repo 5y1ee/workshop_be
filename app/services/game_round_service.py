@@ -26,6 +26,10 @@ class RoundConflict(Exception):
     """라운드 상태/제출 충돌 (이미 마감, 중복 제출 등)."""
 
 
+# speed 모드에서 신호 전에 누른 입력(부정출발)을 RoundSubmission.answer 에 저장하는 센티넬.
+_TAP_DQ = "DQ"
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -307,6 +311,39 @@ async def round_distribution(
     return sum(dist.values()), dist
 
 
+async def list_submissions(db: AsyncSession, round_: GameRound) -> list[dict]:
+    """button/vote 라운드 제출 목록 (운영자 채점용).
+
+    제출자별 답안/정답여부와 닉네임·팀 정보를 도착 순서로 반환한다.
+    """
+    rows = await db.execute(
+        select(
+            RoundSubmission.user_id,
+            RoundSubmission.answer,
+            RoundSubmission.is_correct,
+            RoundSubmission.server_time,
+        )
+        .where(RoundSubmission.round_id == round_.id)
+        .order_by(RoundSubmission.server_time)
+    )
+    info = await _user_info(db, round_)
+    submissions = []
+    for user_id, answer, is_correct, server_time in rows.all():
+        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
+        submissions.append(
+            {
+                "user_id": user_id,
+                "nickname": u["nickname"],
+                "team_id": u["team_id"],
+                "team_name": u["team_name"],
+                "answer": answer,
+                "is_correct": is_correct,
+                "server_time": server_time,
+            }
+        )
+    return submissions
+
+
 # --- tap 게임 전용 -----------------------------------------------------------
 
 
@@ -343,6 +380,17 @@ async def record_tap_once(
         raise RoundConflict("이미 제출했습니다.")
     await db.refresh(submission)
     return submission
+
+
+async def record_tap_disqualify(
+    db: AsyncSession, round_: GameRound, user_id: int
+) -> RoundSubmission:
+    """speed 모드: 신호 전에 누른 부정출발을 실격(DQ)으로 1회 기록.
+
+    RoundSubmission 유니크 제약을 재사용해 멱등 처리하며, 한 번 실격되면
+    이후 정상 제출도 차단된다(이미 기록됨 → RoundConflict).
+    """
+    return await record_tap_once(db, round_, user_id, _TAP_DQ)
 
 
 async def get_tap_results(db: AsyncSession, round_: GameRound) -> list[TapResult]:
@@ -419,8 +467,13 @@ async def _tap_speed_results(db: AsyncSession, round_: GameRound) -> list[TapRes
     )
     items = list(rows.all())
     info = await _user_info(db, round_)
+    # 정상 제출(도착순)을 먼저 순위 매기고, 신호 전 입력으로 실격(DQ)된 제출은 뒤로 보낸다.
+    valid = [(uid, ans) for uid, ans in items if ans != _TAP_DQ]
+    disqualified = [uid for uid, ans in items if ans == _TAP_DQ]
     results = []
-    for rank, (user_id, answer) in enumerate(items, start=1):
+    rank = 0
+    for user_id, answer in valid:
+        rank += 1
         u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
         try:
             ms = float(answer)
@@ -429,6 +482,12 @@ async def _tap_speed_results(db: AsyncSession, round_: GameRound) -> list[TapRes
         results.append(TapResult(user_id=user_id, nickname=u["nickname"],
                                  team_id=u["team_id"], team_name=u["team_name"],
                                  value=ms, rank=rank))
+    for user_id in disqualified:
+        rank += 1
+        u = info.get(user_id, {"nickname": f"user#{user_id}", "team_id": None, "team_name": None})
+        results.append(TapResult(user_id=user_id, nickname=u["nickname"],
+                                 team_id=u["team_id"], team_name=u["team_name"],
+                                 value=0.0, rank=rank, disqualified=True))
     return results
 
 
@@ -517,8 +576,8 @@ async def _tap_progress_loop(round_id: int, session_id: int, duration: int) -> N
 
 
 async def _send_tap_signal(round_id: int) -> None:
-    """speed 모드: 1~3초 랜덤 딜레이 후 signal_at 저장 + 브로드캐스트."""
-    delay = random.uniform(1.0, 3.0)
+    """speed 모드: 3~5초 랜덤 딜레이 후 signal_at 저장 + 브로드캐스트."""
+    delay = random.uniform(3.0, 5.0)
     await asyncio.sleep(delay)
     from app.websocket.events import broadcast_tap_signal
 
