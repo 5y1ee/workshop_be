@@ -125,17 +125,18 @@ echo "[build] frontend"
   npm run build
 )
 
-echo "[db] alembic upgrade head"
-(
-  cd "$APP_DIR"
-  "$PYTHON_BIN" -m alembic upgrade head
-)
-
 if [[ "$RESET_SEED_OPERATIONAL" -eq 1 ]]; then
   echo "[db] reset-seed-operational"
   (
     cd "$APP_DIR"
     "$PYTHON_BIN" -m scripts.seed_db reset-seed-operational --yes
+    "$PYTHON_BIN" -m alembic stamp head
+  )
+else
+  echo "[db] alembic upgrade head"
+  (
+    cd "$APP_DIR"
+    "$PYTHON_BIN" -m alembic upgrade head
   )
 fi
 
