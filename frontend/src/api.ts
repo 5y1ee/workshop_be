@@ -52,6 +52,7 @@ export interface TimetableEntry {
   label: string | null
   raffle_reward: number
   main_visible: boolean
+  score_mode: 'team' | 'individual' | null
 }
 
 export interface GameSession {
@@ -416,6 +417,8 @@ export const api = {
     request<MyHiddenRole>(`/api/seasons/${seasonId}/my-hidden-role`, token),
   myTeamBuffs: (token: string, sessionId: number) =>
     request<TeamBuff[]>(`/api/sessions/${sessionId}/my-team-buffs`, token),
+  sessionTeamBuffs: (token: string, sessionId: number) =>
+    request<TeamBuff[]>(`/api/sessions/${sessionId}/team-buffs`, token),
   rewards: (token: string, seasonId: number) =>
     request<RewardWithClaims[]>(`/api/seasons/${seasonId}/rewards`, token),
   gachaPull: (token: string, seasonId: number) =>
@@ -434,7 +437,12 @@ export const api = {
   createTimetable: (
     token: string,
     seasonId: number,
-    body: { game_id: number; order_index: number; label?: string | null },
+    body: {
+      game_id: number
+      order_index: number
+      label?: string | null
+      score_mode?: 'team' | 'individual' | null
+    },
   ) =>
     request<TimetableEntry>(`/api/seasons/${seasonId}/timetable`, token, {
       method: 'POST',
@@ -450,6 +458,7 @@ export const api = {
       label?: string | null
       raffle_reward?: number
       main_visible?: boolean
+      score_mode?: 'team' | 'individual' | null
     },
   ) =>
     request<TimetableEntry>(`/api/timetable/${entryId}`, token, {
