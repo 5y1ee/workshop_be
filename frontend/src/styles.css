@@ -13,9 +13,12 @@
 }
 
 html,
-body {
+body,
+#root {
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -28,13 +31,15 @@ body {
 
 /* 모바일 폰 프레임 (가운데 정렬) */
 .container {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
   max-width: 540px;       /* 태블릿에서도 모바일 UI를 중앙 고정 */
   margin: 0 auto;
   background: var(--card);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 0 32px rgba(0, 0, 0, 0.08);
 }
 
@@ -87,6 +92,8 @@ body {
   background-position: center 20%;
   position: relative;
   padding: 40px 24px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .login::before {
@@ -423,7 +430,9 @@ button:disabled {
 .shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .shell-top {
   flex: none;
@@ -432,7 +441,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: calc(9px + env(safe-area-inset-top, 0px)) 12px 9px;
   border-bottom: 3px solid #111;
   box-shadow: 0 3px 0 var(--poke-yellow), 0 6px 0 #111, 0 6px 12px rgba(0, 0, 0, 0.3);
   position: relative;
@@ -510,16 +519,82 @@ button:disabled {
 .shell-top .link:active {
   background: rgba(0, 0, 0, 0.32);
 }
-.shell-main { flex: 1; overflow-y: auto; background: #f7f8fb; }
+.shell-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #f7f8fb;
+  -webkit-overflow-scrolling: touch;
+}
 .shell-main::-webkit-scrollbar { width: 0; }
 
 .sec-title { font-size: 15px; font-weight: 800; margin: 18px 0 10px; }
 .sec-title:first-child { margin-top: 0; }
 
+.notice-banner {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #fff8e6;
+  border-bottom: 1px solid #f0d88a;
+  color: #5f4300;
+  box-shadow: 0 3px 12px rgba(31, 36, 48, 0.08);
+}
+.notice-kicker {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ffcb05;
+  color: #3d2a00;
+  font-size: 11px;
+  font-weight: 900;
+}
+.notice-marquee {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.notice-message {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.notice-marquee.scrolling .notice-message {
+  max-width: none;
+  padding-left: 100%;
+  text-overflow: clip;
+  animation: notice-marquee 14s linear infinite;
+}
+@keyframes notice-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-100% - 16px)); }
+}
+.notice-dismiss {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(95, 67, 0, 0.1);
+  color: #5f4300;
+  font-size: 18px;
+  line-height: 1;
+}
+
 /* 하단 네비 */
 .nav {
   flex: none;
-  height: 62px;
+  min-height: calc(62px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: #fff;
   border-top: 1px solid var(--line);
   display: grid;
@@ -864,6 +939,48 @@ button:disabled {
 .assign { width: auto; flex: none; max-width: 130px; padding: 6px 8px; font-size: 12px; }
 .admin-tabs { margin: 12px 0 10px; flex-wrap: wrap; }
 .admin-tabs button { flex: 1 1 auto; min-width: 84px; white-space: nowrap; }
+.notice-admin-form {
+  display: grid;
+  gap: 8px;
+}
+.notice-admin-form .op-row {
+  align-items: flex-end;
+}
+.notice-textarea {
+  min-height: 92px;
+}
+.notice-duration {
+  flex: 1;
+  min-width: 140px;
+  color: var(--ink);
+}
+.notice-duration span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.notice-admin-form .op-btn {
+  min-height: 46px;
+}
+.notice-admin-row {
+  align-items: flex-start;
+}
+.notice-admin-row .row-main {
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  overflow: hidden;
+  cursor: default;
+}
+.notice-admin-row .row-main b {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
 .user-status-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -971,6 +1088,16 @@ button:disabled {
 .chat-head .dot.on { background: #e3f6e8; color: #1f8a44; }
 .chat-head .dot.off { background: #fde7e7; color: var(--poke-red, #e03131); }
 .chat-round { font-size: 13px; padding: 8px 10px; background: #f6f8fc; border-radius: 10px; }
+.chat-admin-hint {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #8a6d1a;
+  font-size: 11px;
+  font-weight: 800;
+}
 .chat-audio { display: block; width: 100%; margin-top: 8px; }
 .chat-list {
   display: flex; flex-direction: column; gap: 6px;

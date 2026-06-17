@@ -1,12 +1,14 @@
-"""DB 초기화 + 데모 시드 스크립트.
+"""DB 초기화 + 운영/데모 시드 스크립트.
 
 테스트가 운영 DB 에 쌓아둔 더미를 정리하고, 깨끗한 초기 데이터를 넣는다.
 **대상은 .env 의 DATABASE_URL (운영 DB)** 이므로 파괴적 작업에는 --yes 가 필요하다.
 
 사용법:
-    python -m scripts.seed_db reset --yes        # 전체 테이블 drop + create
-    python -m scripts.seed_db seed               # 데모 데이터 삽입 (비어있을 때만)
-    python -m scripts.seed_db reset-seed --yes   # 초기화 후 시드까지 한 번에
+    python -m scripts.seed_db reset --yes                    # 전체 테이블 drop + create
+    python -m scripts.seed_db seed                           # 데모 데이터 삽입 (비어있을 때만)
+    python -m scripts.seed_db seed-operational               # 운영 초기 데이터 삽입
+    python -m scripts.seed_db reset-seed --yes               # 초기화 후 데모 시드
+    python -m scripts.seed_db reset-seed-operational --yes   # 초기화 후 운영 시드
 
 기본 계정: sangyoon / sangyoon1234 (관리자), 참가자 예시: sanghee / sanghee1234
 """
@@ -61,6 +63,17 @@ PARTICIPANTS: list[tuple[str, str, str, str, int]] = [
 TEAM_NAMES = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀"]
 TEAM_SIZE = 6
 BOOTSTRAP_ADMIN = "sangyoon"
+GAMES_DEF = [
+    ("몸으로 말해요", "제스처로 단어 맞히기", "team_vs", "offline"),
+    ("퀴즈 대결", "버저 누르고 정답", "team_vs", "button"),
+    ("노래 맞추기", "채팅으로 제목 입력", "individual", "chat"),
+    ("보물찾기", "개인전 미션", "individual", "offline"),
+    ("릴레이 게임", "대표자 릴레이", "representative", "button"),
+    ("철인 3종", "99초 게임 · 실내외 · 팀전원", "team_vs", "offline"),
+    ("신발 던지기", "실외 · 전원 예선 후 결승", "individual", "offline"),
+    ("좀비게임", "백업 · 실내외 넓은 공간 · 전원", "individual", "offline"),
+    ("버튼 챌린지", "반사신경 버튼 탭 게임 (횟수/빠르기/타이밍)", "team_vs", "tap"),
+]
 
 
 def _profile_image(pokemon: str, nickname: str) -> str:
@@ -87,7 +100,7 @@ async def reset() -> None:
     print(f"✅ reset 완료 — '{_target_db()}' 의 모든 테이블 drop + create")
 
 
-async def seed() -> None:
+async def seed(*, include_demo_details: bool = True) -> None:
     async with AsyncSessionLocal() as db:
         existing = (await db.execute(select(func.count()).select_from(Season))).scalar()
         if existing and existing > 0:
@@ -145,26 +158,24 @@ async def seed() -> None:
                 TeamMembership(season_id=season.id, team_id=team.id, user_id=u.id)
             )
 
-        # --- 게임 11개 ---
-        games_def = [
-            ("몸으로 말해요", "제스처로 단어 맞히기", "team_vs", "offline"),
-            ("퀴즈 대결", "버저 누르고 정답", "team_vs", "button"),
-            ("노래 맞추기", "채팅으로 제목 입력", "individual", "chat"),
-            ("보물찾기", "개인전 미션", "individual", "offline"),
-            ("릴레이 게임", "대표자 릴레이", "representative", "button"),
-            ("철인 3종", "99초 게임 · 실내외 · 팀전원", "team_vs", "offline"),
-            ("신발 던지기", "실외 · 전원 예선 후 결승", "individual", "offline"),
-            ("좀비게임", "백업 · 실내외 넓은 공간 · 전원", "individual", "offline"),
-            ("버튼 챌린지", "반사신경 버튼 탭 게임 (횟수/빠르기/타이밍)", "team_vs", "tap"),
-        ]
         games = [
             Game(title=t, description=d, participant_type=p, input_type=i)
-            for t, d, p, i in games_def
+            for t, d, p, i in GAMES_DEF
         ]
         db.add_all(games)
         await db.flush()
 
-        # --- 타임테이블 9개 ---
+        if not include_demo_details:
+            await db.commit()
+            print("✅ 운영 시드 완료")
+            print("   - 시즌 '가평 워크샵 2026' (active)")
+            print(f"   - 팀 {len(teams)} / 참가자 {len(PARTICIPANTS)} / 게임 {len(games)}")
+            print("   - 타임테이블/세션/라운드/점수/결과/리워드 없음")
+            print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
+            print("   - 참가자 예시: sanghee/sanghee1234")
+            return
+
+        # --- 타임테이블 ---
         entries = [
             Timetable(
                 season_id=season.id,
@@ -283,7 +294,7 @@ async def seed() -> None:
 
     print("✅ seed 완료")
     print("   - 시즌 '가평 워크샵 2026' (active)")
-    print("   - 팀 3 / 참가자 18 / 게임 9 / 타임테이블 9")
+    print(f"   - 팀 3 / 참가자 18 / 게임 {len(GAMES_DEF)} / 타임테이블 {len(GAMES_DEF)}")
     print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 6")
     print("   - 라운드: 퀴즈대결(button) 4문제·노래맞추기(chat) 2문제")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
@@ -301,8 +312,11 @@ def _require_yes(args, action: str) -> None:
 
 
 async def _main() -> None:
-    parser = argparse.ArgumentParser(description="DB 초기화 + 데모 시드")
-    parser.add_argument("command", choices=["reset", "seed", "reset-seed"])
+    parser = argparse.ArgumentParser(description="DB 초기화 + 운영/데모 시드")
+    parser.add_argument(
+        "command",
+        choices=["reset", "seed", "seed-operational", "reset-seed", "reset-seed-operational"],
+    )
     parser.add_argument("--yes", action="store_true", help="파괴적 작업 확인")
     args = parser.parse_args()
 
@@ -313,10 +327,16 @@ async def _main() -> None:
             await reset()
         elif args.command == "seed":
             await seed()
+        elif args.command == "seed-operational":
+            await seed(include_demo_details=False)
         elif args.command == "reset-seed":
             _require_yes(args, "reset-seed")
             await reset()
             await seed()
+        elif args.command == "reset-seed-operational":
+            _require_yes(args, "reset-seed-operational")
+            await reset()
+            await seed(include_demo_details=False)
     finally:
         await engine.dispose()
 

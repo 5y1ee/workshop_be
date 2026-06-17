@@ -38,8 +38,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               ? `🎰 룰렛 → ${e.selected} (세션 #${sid})`
               : e.type === 'round_started'
                 ? `▶️ 라운드 ${e.order_index} 시작 (세션 #${sid})`
+                : e.type === 'round_hint_revealed'
+                  ? `💡 라운드 ${e.order_index} 힌트 공개 (세션 #${sid})`
                   : e.type === 'round_revealed'
                   ? `✅ 라운드 ${e.order_index} 정답: ${e.correct_answer} (세션 #${sid})`
+                  : e.type === 'notice_created'
+                  ? '📢 새 공지'
+                  : e.type === 'notice_deleted'
+                  ? '📢 공지 삭제'
                   : e.type === 'reward_claimed'
                   ? `🎁 ${e.nickname} → ${e.reward_name} 당첨!`
                   : e.type === 'reward_unclaimed'

@@ -22,6 +22,7 @@ import {
   type GameSession,
   type HiddenRole,
   type HiddenRoleAssignment,
+  type Notice,
   type Reward,
   type RewardClaimDetail,
   type SeasonMembership,
@@ -148,7 +149,7 @@ export default function AdminPage({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [adminTab, setAdminTab] = useState<
-    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs'
+    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs' | 'notices'
   >('teams')
 
   const run = async (fn: () => Promise<void>) => {
@@ -262,6 +263,9 @@ export default function AdminPage({ onClose }: Props) {
     duration: 'next_game',
   })
   const [entrySessions, setEntrySessions] = useState<Record<number, GameSession | null>>({})
+  const [notices, setNotices] = useState<Notice[]>([])
+  const [noticeMessage, setNoticeMessage] = useState('')
+  const [noticeDuration, setNoticeDuration] = useState('10')
 
   const loadUsers = useCallback(() => {
     api.users(t).then(setUsers).catch(() => setUsers([]))
@@ -316,6 +320,15 @@ export default function AdminPage({ onClose }: Props) {
     api.seasonTeamBuffs(t, seasonId).then(setTeamBuffs).catch(() => setTeamBuffs([]))
   }, [t, seasonId])
   useEffect(loadTeamBuffs, [loadTeamBuffs])
+
+  const loadNotices = useCallback(() => {
+    if (seasonId == null) {
+      setNotices([])
+      return
+    }
+    api.notices(t, seasonId).then(setNotices).catch(() => setNotices([]))
+  }, [t, seasonId])
+  useEffect(loadNotices, [loadNotices])
 
   const teamOf = (userId: number) =>
     memberships.find((m) => m.user_id === userId)?.team_id ?? null
@@ -412,6 +425,29 @@ export default function AdminPage({ onClose }: Props) {
       if (!teamId || !buffId) throw new ApiError(400, '팀과 버프/디버프를 선택하세요.')
       await api.assignTeamBuff(t, session.id, Number(teamId), Number(buffId))
       loadTeamBuffs()
+    })
+
+  const createNotice = () =>
+    run(async () => {
+      if (seasonId == null) throw new ApiError(400, '먼저 시즌을 선택하세요.')
+      if (!noticeMessage.trim()) throw new ApiError(400, '공지 내용을 입력하세요.')
+      const duration = Number(noticeDuration)
+      if (!Number.isFinite(duration) || duration < 1) {
+        throw new ApiError(400, '공지 유지 시간은 1분 이상이어야 합니다.')
+      }
+      await api.createNotice(t, seasonId, {
+        message: noticeMessage.trim(),
+        duration_minutes: Math.floor(duration),
+      })
+      setNoticeMessage('')
+      setNoticeDuration('10')
+      loadNotices()
+    })
+
+  const deleteNotice = (noticeId: number) =>
+    run(async () => {
+      await api.deleteNotice(t, noticeId)
+      loadNotices()
     })
 
   // ---------- 타임테이블 ----------
@@ -684,12 +720,62 @@ export default function AdminPage({ onClose }: Props) {
             <button className={adminTab === 'buffs' ? 'on' : 'off'} onClick={() => setAdminTab('buffs')}>
               버프/디버프
             </button>
+            <button className={adminTab === 'notices' ? 'on' : 'off'} onClick={() => setAdminTab('notices')}>
+              공지
+            </button>
             <button className={adminTab === 'season' ? 'on' : 'off'} onClick={() => setAdminTab('season')}>
               시즌·뽑기
             </button>
           </div>
 
-          {adminTab === 'users' ? (
+          {adminTab === 'notices' ? (
+            <>
+              <h3 className="sec-title">실시간 공지</h3>
+              <div className="notice-admin-form">
+                <textarea
+                  className="mini-input notice-textarea"
+                  placeholder="사용자에게 보여줄 공지 내용을 입력하세요."
+                  value={noticeMessage}
+                  onChange={(e) => setNoticeMessage(e.target.value)}
+                  maxLength={500}
+                />
+                <div className="op-row">
+                  <label className="notice-duration">
+                    <span>유지 시간(분)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={noticeDuration}
+                      onChange={(e) => setNoticeDuration(e.target.value)}
+                    />
+                  </label>
+                  <button className="op-btn" disabled={busy} onClick={createNotice}>
+                    공지하기
+                  </button>
+                </div>
+              </div>
+              <div className="admin-list">
+                {notices.length === 0 ? (
+                  <p className="muted">등록된 공지가 없습니다.</p>
+                ) : (
+                  notices.map((notice) => (
+                    <div key={notice.id} className="admin-row notice-admin-row">
+                      <span className="row-main">
+                        <b>{notice.message}</b>
+                        <span className="muted">
+                          만료 {new Date(notice.expires_at).toLocaleString('ko-KR')}
+                        </span>
+                      </span>
+                      <button className="mini-btn danger" disabled={busy} onClick={() => deleteNotice(notice.id)}>
+                        삭제
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          ) : adminTab === 'users' ? (
             <>
               <h3 className="sec-title">사용자 현황</h3>
               <div className="admin-list">
