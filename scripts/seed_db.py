@@ -38,24 +38,24 @@ from app.models.user import User
 
 # (화면 이름, 로그인 ID, 포켓몬, 권한, 개인 포인트) — 팀은 목록 순서대로 6명씩 배치
 PARTICIPANTS: list[tuple[str, str, str, str, int]] = [
-    ("나상희", "sanghee", "찌리리공", "user", 40),
-    ("김현진", "hyunjin", "파이숭이", "user", 25),
-    ("이승민", "seungmin", "어니부기", "user", 15),
-    ("양준석", "junseok", "야돈", "user", 12),
-    ("임지호", "jiho", "근육몬", "user", 10),
-    ("정소희", "sohee", "모다피", "user", 8),
-    ("박민지", "minji", "마자용", "admin", 35),
-    ("이소민", "somin", "치코리타", "admin", 30),
-    ("이상윤", "sangyoon", "네이티오", "admin", 28),
-    ("신윤섭", "yunseop", "이상해씨", "user", 20),
-    ("황지선", "jiseon", "아르코", "user", 18),
-    ("유태영", "taeyoung", "파오리", "user", 14),
-    ("양수빈", "subin", "펭도리", "user", 22),
-    ("김소연", "soyeon", "꼬리선", "user", 20),
-    ("박재한", "jaehan", "고라파덕", "user", 16),
-    ("여민호", "minho", "슈륙챙이", "user", 12),
-    ("김민우", "minwoo", "잠만보", "user", 10),
-    ("장승연", "seungyeon", "에브이", "user", 8),
+    ("나상희", "sanghee", "찌리리공", "user", 0),
+    ("김현진", "hyunjin", "파이숭이", "user", 0),
+    ("이승민", "seungmin", "어니부기", "user", 0),
+    ("양준석", "junseok", "야돈", "user", 0),
+    ("임지호", "jiho", "근육몬", "user", 0),
+    ("정소희", "sohee", "모다피", "user", 0),
+    ("박민지", "minji", "마자용", "admin", 0),
+    ("이소민", "somin", "치코리타", "admin", 0),
+    ("이상윤", "sangyoon", "네이티오", "admin", 0),
+    ("신윤섭", "yunseop", "이상해씨", "user", 0),
+    ("황지선", "jiseon", "아르코", "user", 0),
+    ("유태영", "taeyoung", "파오리", "user", 0),
+    ("양수빈", "subin", "펭도리", "user", 0),
+    ("김소연", "soyeon", "꼬리선", "user", 0),
+    ("박재한", "jaehan", "고라파덕", "user", 0),
+    ("여민호", "minho", "슈륙챙이", "user", 0),
+    ("김민우", "minwoo", "잠만보", "user", 0),
+    ("장승연", "seungyeon", "에브이", "user", 0),
 ]
 
 TEAM_NAMES = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀"]
@@ -132,7 +132,7 @@ async def seed() -> None:
                 password=hash_password(f"{username}1234"),
                 nickname=nickname,
                 role=role,
-                point=point,
+                point=0,
                 profile_image=_profile_image(pokemon, nickname),
             )
             db.add(u)
@@ -149,7 +149,7 @@ async def seed() -> None:
         games_def = [
             ("몸으로 말해요", "제스처로 단어 맞히기", "team_vs", "offline"),
             ("퀴즈 대결", "버저 누르고 정답", "team_vs", "button"),
-            ("노래 맞추기", "채팅으로 제목 입력", "team_vs", "chat"),
+            ("노래 맞추기", "채팅으로 제목 입력", "individual", "chat"),
             ("보물찾기", "개인전 미션", "individual", "offline"),
             ("릴레이 게임", "대표자 릴레이", "representative", "button"),
             ("철인 3종", "99초 게임 · 실내외 · 팀전원", "team_vs", "offline"),
@@ -170,7 +170,7 @@ async def seed() -> None:
                 season_id=season.id,
                 game_id=games[idx].id,
                 order_index=idx + 1,
-                label=f"{idx + 1}. {games[idx].title}",
+                label=games[idx].title,
             )
             for idx in range(len(games))
         ]
@@ -178,8 +178,8 @@ async def seed() -> None:
         await db.flush()
 
         # --- 세션 상태 ---
-        #  idx 0: 종료(점수+결과)  | idx 1: button 진행중  | idx 2: chat 진행중  | 나머지 대기
-        in_progress_idx = {1, 2}
+        #  idx 0: 종료(점수+결과)  | 나머지 대기
+        in_progress_idx: set[int] = set()
         sessions = []
         for idx, entry in enumerate(entries):
             if idx == 0:
@@ -201,7 +201,7 @@ async def seed() -> None:
         db.add_all(sessions)
         await db.flush()
 
-        # --- 라운드(세션 내부 진행도): 진행중 button/chat 세션에 문제 4개씩, 1번 문제 open ---
+        # --- 라운드(세션 내부 진행도): button/chat 세션에 문제 4개씩, 모두 대기 상태 ---
         # idx 1 = 퀴즈 대결(button), idx 2 = 노래 맞추기(chat)
         button_rounds = [
             ("대한민국의 수도는?", ["서울", "부산", "인천", "대전"], "서울"),
@@ -217,15 +217,14 @@ async def seed() -> None:
         ]
 
         def _round(session_id, order, prompt, options, answer):
-            opened = order == 1  # 1번 문제만 열어둔 상태로 시드
             return GameRound(
                 session_id=session_id,
                 order_index=order,
-                status="open" if opened else "waiting",
+                status="waiting",
                 prompt=prompt,
                 options=options,
                 correct_answer=answer,
-                opened_at=now if opened else None,
+                opened_at=None,
                 created_by=admin.id,
             )
 
@@ -241,7 +240,6 @@ async def seed() -> None:
         score_plan = [
             (0, [(teams[0], 35), (teams[1], 20), (teams[2], 10)], teams[0]),
             (1, [(teams[0], 10), (teams[1], 5)], None),
-            (2, [(teams[1], 8), (teams[2], 4)], None),
         ]
         for sidx, rows, winner in score_plan:
             for team, sc in rows:
@@ -289,7 +287,7 @@ async def seed() -> None:
     print("   - 시즌 '가평 워크샵 2026' (active)")
     print("   - 팀 3 / 참가자 18 / 게임 9 / 타임테이블 9")
     print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 6")
-    print("   - 라운드: 퀴즈대결(button)·노래맞추기(chat) 각 4문제, 1번 문제 open")
+    print("   - 라운드: 퀴즈대결(button)·노래맞추기(chat) 각 4문제")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
     print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
     print("   - 참가자 예시: sanghee/sanghee1234")
