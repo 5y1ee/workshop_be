@@ -183,3 +183,82 @@ async def test_session_created_broadcast(monkeypatch):
             "state": "idle",
         }
     ]
+
+
+async def test_score_changed_broadcast(monkeypatch):
+    from app.websocket import events
+
+    calls: list[dict] = []
+
+    async def fake_broadcast(message: dict) -> None:
+        calls.append(message)
+
+    monkeypatch.setattr(events.manager, "broadcast", fake_broadcast)
+
+    score = SimpleNamespace(
+        id=31,
+        session_id=7,
+        subject_type="team",
+        subject_id=5,
+        chat_log_id=None,
+        score=12,
+    )
+    await events.broadcast_score_changed(score, "updated")
+
+    assert calls == [
+        {
+            "type": "score_changed",
+            "session_id": 7,
+            "score_id": 31,
+            "subject_type": "team",
+            "subject_id": 5,
+            "chat_log_id": None,
+            "score": 12,
+            "action": "updated",
+        }
+    ]
+
+
+async def test_team_membership_changed_broadcast(monkeypatch):
+    from app.websocket import events
+
+    calls: list[dict] = []
+
+    async def fake_broadcast(message: dict) -> None:
+        calls.append(message)
+
+    monkeypatch.setattr(events.manager, "broadcast", fake_broadcast)
+
+    await events.broadcast_team_membership_changed(1, 2, 3, "assigned")
+
+    assert calls == [
+        {
+            "type": "team_membership_changed",
+            "season_id": 1,
+            "user_id": 2,
+            "team_id": 3,
+            "action": "assigned",
+        }
+    ]
+
+
+async def test_reward_catalog_changed_broadcast(monkeypatch):
+    from app.websocket import events
+
+    calls: list[dict] = []
+
+    async def fake_broadcast(message: dict) -> None:
+        calls.append(message)
+
+    monkeypatch.setattr(events.manager, "broadcast", fake_broadcast)
+
+    await events.broadcast_reward_catalog_changed(1, 9, "deleted")
+
+    assert calls == [
+        {
+            "type": "reward_catalog_changed",
+            "season_id": 1,
+            "reward_id": 9,
+            "action": "deleted",
+        }
+    ]

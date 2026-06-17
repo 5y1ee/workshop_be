@@ -307,7 +307,14 @@ async def test_team_vs_summary_rolls_individual_into_team(client, admin_headers)
     }]
 
 
-async def test_list_and_update_score(client, admin_headers):
+async def test_list_and_update_score(client, admin_headers, monkeypatch):
+    from app.api import score as score_api
+
+    calls: list[tuple[int, str]] = []
+
+    async def fake_broadcast_score_changed(score, action: str) -> None:
+        calls.append((score.id, action))
+
     session_id, team_id, _ = await _setup(client, admin_headers)
     score_id = (
         await client.post(
@@ -320,12 +327,14 @@ async def test_list_and_update_score(client, admin_headers):
     res = await client.get(f"/api/sessions/{session_id}/scores", headers=admin_headers)
     assert [s["id"] for s in res.json()] == [score_id]
 
+    monkeypatch.setattr(score_api, "broadcast_score_changed", fake_broadcast_score_changed)
     res = await client.patch(
         f"/api/scores/{score_id}", json={"score": 99, "memo": "정정"}, headers=admin_headers
     )
     assert res.status_code == 200
     assert res.json()["score"] == 99
     assert res.json()["updated_at"] is not None
+    assert calls == [(score_id, "updated")]
 
 
 async def _member_point(client, admin_headers, team_id: int, user_id: int) -> int:

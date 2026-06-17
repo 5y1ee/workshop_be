@@ -362,6 +362,40 @@ async def test_reassign_moves_user_between_teams(client, admin_headers):
     assert any(m["id"] == user_id for m in blue_members)
 
 
+async def test_team_membership_changes_broadcast(client, admin_headers, monkeypatch):
+    from app.api import team as team_api
+
+    calls: list[tuple[int, int | None, int | None, str]] = []
+
+    async def fake_broadcast(
+        season_id: int, user_id: int | None, team_id: int | None, action: str
+    ) -> None:
+        calls.append((season_id, user_id, team_id, action))
+
+    monkeypatch.setattr(team_api, "broadcast_team_membership_changed", fake_broadcast)
+
+    season_id, red_id, _ = await _season_with_two_teams(client, admin_headers)
+    user_id = await _create_user(client, admin_headers)
+
+    res = await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_id},
+        headers=admin_headers,
+    )
+    assert res.status_code == 201
+
+    res = await client.delete(
+        f"/api/seasons/{season_id}/members/{user_id}",
+        headers=admin_headers,
+    )
+    assert res.status_code == 204
+
+    assert calls == [
+        (season_id, user_id, red_id, "assigned"),
+        (season_id, user_id, None, "unassigned"),
+    ]
+
+
 async def test_my_team_reflects_active_season_membership(client, admin_headers):
     """활성 시즌에 배정되면 로그인 응답 team_id 와 my-team 이 반영된다."""
     season_id, red_id, _ = await _season_with_two_teams(client, admin_headers)
@@ -464,6 +498,47 @@ async def test_rewards_scoped_to_season(client, admin_headers):
         await client.get(f"/api/seasons/{other_id}/rewards", headers=admin_headers)
     ).json()
     assert all(r["id"] != reward_id for r in there)
+
+
+async def test_reward_catalog_changes_broadcast(client, admin_headers, monkeypatch):
+    from app.api import reward as reward_api
+
+    calls: list[tuple[int, int | None, str]] = []
+
+    async def fake_broadcast(season_id: int, reward_id: int | None, action: str) -> None:
+        calls.append((season_id, reward_id, action))
+
+    monkeypatch.setattr(
+        reward_api.ws_events,
+        "broadcast_reward_catalog_changed",
+        fake_broadcast,
+    )
+
+    season_id, _, _ = await _season_with_two_teams(client, admin_headers)
+
+    created = await client.post(
+        f"/api/seasons/{season_id}/rewards",
+        json={"name": "상품권 5만", "total_count": 3},
+        headers=admin_headers,
+    )
+    assert created.status_code == 201
+    reward_id = created.json()["id"]
+
+    updated = await client.patch(
+        f"/api/rewards/{reward_id}",
+        json={"name": "상품권 10만"},
+        headers=admin_headers,
+    )
+    assert updated.status_code == 200
+
+    deleted = await client.delete(f"/api/rewards/{reward_id}", headers=admin_headers)
+    assert deleted.status_code == 204
+
+    assert calls == [
+        (season_id, reward_id, "created"),
+        (season_id, reward_id, "updated"),
+        (season_id, reward_id, "deleted"),
+    ]
 
 
 async def test_rewards_requires_auth(client):
