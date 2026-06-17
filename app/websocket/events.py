@@ -43,6 +43,18 @@ async def broadcast_session_state(session: GameSession) -> None:
     )
 
 
+async def broadcast_session_created(session: GameSession) -> None:
+    """게임 세션 생성을 전체 접속자에게 브로드캐스트."""
+    await manager.broadcast(
+        {
+            "type": "session_created",
+            "session_id": session.id,
+            "timetable_id": session.timetable_id,
+            "state": session.state,
+        }
+    )
+
+
 async def broadcast_timetable_changed(
     season_id: int, entry_id: int | None, action: str
 ) -> None:
