@@ -26,6 +26,7 @@ class ScoreRead(BaseModel):
     session_id: int
     subject_type: str
     subject_id: int
+    subject_name: str | None = None
     chat_log_id: int | None
     score: int
     memo: str | None
@@ -51,3 +52,13 @@ class UserScoreboardItem(BaseModel):
     user_id: int
     name: str
     total_score: int
+
+
+class UserStatusItem(BaseModel):
+    user_id: int
+    nickname: str
+    role: str
+    team_id: int | None
+    team_name: str | None
+    cumulative_score: int
+    point: int

@@ -9,6 +9,7 @@ class TimetableCreate(BaseModel):
     phase: str | None = None
     label: str | None = None
     raffle_reward: int = 0
+    main_visible: bool = True
 
 
 class TimetableUpdate(BaseModel):
@@ -17,6 +18,7 @@ class TimetableUpdate(BaseModel):
     phase: str | None = None
     label: str | None = None
     raffle_reward: int | None = None
+    main_visible: bool | None = None
 
 
 class TimetableRead(BaseModel):
@@ -29,5 +31,6 @@ class TimetableRead(BaseModel):
     order_index: int
     label: str | None
     raffle_reward: int
+    main_visible: bool
     created_at: datetime
     updated_at: datetime | None
