@@ -27,9 +27,13 @@ const GAME_MARKERS_BY_TITLE: Record<string, { image: string }> = {
   '철인 3종': { image: 'triathlon.png' },
   '신발 던지기': { image: 'shoe-throw.png' },
   좀비게임: { image: 'zombie-game.png' },
+  '팀 오프라인 게임': { image: 'offline-game.png' },
+  '개인 오프라인 게임': { image: 'offline-game.png' },
 }
 
-const FALLBACK_MARKERS = Object.values(GAME_MARKERS_BY_TITLE)
+const FALLBACK_MARKERS = [
+  ...new Map(Object.values(GAME_MARKERS_BY_TITLE).map((m) => [m.image, m])).values(),
+]
 const MARKER_X_PATTERN = ['55%', '25%', '72%', '38%', '78%', '24%', '73%', '25%']
 
 function markerTop(index: number, count: number): string {
