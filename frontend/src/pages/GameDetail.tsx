@@ -20,6 +20,7 @@ import RoundOperator from '../components/RoundOperator'
 import ChatPanel from '../components/ChatPanel'
 import ButtonPanel from '../components/ButtonPanel'
 import ChatJudgePanel from '../components/ChatJudgePanel'
+import QuizJudgePanel from '../components/QuizJudgePanel'
 import TapPanel from '../components/TapPanel'
 import TapOperatorPanel from '../components/TapOperatorPanel'
 import ScoreHistoryPanel from '../components/ScoreHistoryPanel'
@@ -279,6 +280,16 @@ export default function GameDetail({
 
           {isAdmin && isChat && state && (
             <ChatJudgePanel
+              token={t}
+              sessionId={sessionId}
+              round={currentRound}
+              participantType={game?.participant_type ?? 'team_vs'}
+              state={state}
+              onScored={refresh}
+            />
+          )}
+          {isAdmin && isButton && state && (
+            <QuizJudgePanel
               token={t}
               sessionId={sessionId}
               round={currentRound}

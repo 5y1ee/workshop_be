@@ -32,6 +32,7 @@ interface SubmittedRow {
   team_name: string | null
   value: number
   arrived_at: number
+  disqualified?: boolean
 }
 
 export default function TapOperatorPanel({
@@ -93,6 +94,7 @@ export default function TapOperatorPanel({
           team_name: (e.team_name as string | null) ?? null,
           value: e.value as number,
           arrived_at: Date.now(),
+          disqualified: (e.disqualified as boolean | undefined) ?? false,
         }
         setLiveSubmits((prev) => {
           // 중복 방지: 같은 user_id가 이미 있으면 덮어쓰기
@@ -206,7 +208,7 @@ export default function TapOperatorPanel({
             disabled={signaling}
             onClick={sendSignal}
           >
-            {signaling ? '신호 발송됨 (1~3초 내 발사)' : '🟢 신호 보내기'}
+            {signaling ? '신호 발송됨 (3~5초 내 발사)' : '🟢 신호 보내기'}
           </button>
         </div>
       )}
@@ -267,11 +269,11 @@ export default function TapOperatorPanel({
                   .slice()
                   .sort((a, b) => a.arrived_at - b.arrived_at)
                   .map((s, i) => (
-                    <tr key={s.user_id} className="tap-result-row">
-                      <td>{i + 1}</td>
+                    <tr key={s.user_id} className={`tap-result-row${s.disqualified ? ' tap-dq-row' : ''}`}>
+                      <td>{s.disqualified ? '—' : i + 1}</td>
                       <td>{s.nickname}</td>
                       <td>{s.team_name ?? '—'}</td>
-                      <td>{formatValue(mode, s.value)}</td>
+                      <td>{s.disqualified ? '실격' : formatValue(mode, s.value)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -307,26 +309,30 @@ export default function TapOperatorPanel({
                 {results!.map((r) => (
                   <tr
                     key={r.user_id}
-                    className={`tap-result-row${r.rank === 1 ? ' tap-rank-1' : ''}`}
+                    className={`tap-result-row${r.rank === 1 && !r.disqualified ? ' tap-rank-1' : ''}${r.disqualified ? ' tap-dq-row' : ''}`}
                   >
-                    <td>{r.rank}</td>
+                    <td>{r.disqualified ? '—' : r.rank}</td>
                     <td>{r.nickname}</td>
                     <td>{r.team_name ?? '—'}</td>
-                    <td>{formatValue(mode, r.value)}</td>
+                    <td>{r.disqualified ? '실격' : formatValue(mode, r.value)}</td>
                     <td>
-                      <button
-                        className="op-btn tap-award-btn"
-                        disabled={
-                          busyId === r.user_id ||
-                          !canScore ||
-                          awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
-                        }
-                        onClick={() => award(r)}
-                      >
-                        {awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
-                          ? '기록됨'
-                          : '점수 기록'}
-                      </button>
+                      {r.disqualified ? (
+                        <span className="muted">실격</span>
+                      ) : (
+                        <button
+                          className="op-btn tap-award-btn"
+                          disabled={
+                            busyId === r.user_id ||
+                            !canScore ||
+                            awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
+                          }
+                          onClick={() => award(r)}
+                        >
+                          {awardedIds.has(`${scoresTeam ? 'team' : 'user'}:${scoresTeam ? r.team_id : r.user_id}`)
+                            ? '기록됨'
+                            : '점수 기록'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

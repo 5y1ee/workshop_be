@@ -52,6 +52,7 @@ export default function TapPanel({ sessionId, round }: Props) {
   // speed 모드
   const [signalReceived, setSignalReceived] = useState(false)
   const signalTimeRef = useRef<number | null>(null)
+  const [disqualified, setDisqualified] = useState(false)
 
   // timing 모드
   const [elapsed, setElapsed] = useState(0)
@@ -77,6 +78,7 @@ export default function TapPanel({ sessionId, round }: Props) {
     setTapCount(0)
     setSignalReceived(false)
     signalTimeRef.current = null
+    setDisqualified(false)
     setElapsed(0)
     elapsedRef.current = 0
     setShowTimer(true)
@@ -111,6 +113,12 @@ export default function TapPanel({ sessionId, round }: Props) {
       if (e.type === 'tap_signal' && e.round_id === active?.id) {
         setSignalReceived(true)
         signalTimeRef.current = Date.now()
+      }
+
+      // speed 모드: 신호 전에 눌러 실격됨 (서버 확정)
+      if (e.type === 'tap_disqualified' && e.round_id === active?.id) {
+        setDisqualified(true)
+        setSubmitted(true)
       }
 
       if (e.type === 'tap_closed' && e.round_id === active?.id) {
@@ -175,7 +183,13 @@ export default function TapPanel({ sessionId, round }: Props) {
     if (submitted) return
 
     if (mode === 'speed') {
-      if (!signalReceived || signalTimeRef.current === null) return
+      // 신호('지금!') 전에 누르면 부정출발 → 실격
+      if (!signalReceived || signalTimeRef.current === null) {
+        send({ type: 'tap_false_start', round_id: active.id })
+        setDisqualified(true)
+        setSubmitted(true)
+        return
+      }
       const ms = Date.now() - signalTimeRef.current
       send({ type: 'tap_press', round_id: active.id, elapsed: ms })
       setMyValue(ms)
@@ -203,10 +217,10 @@ export default function TapPanel({ sessionId, round }: Props) {
   const isActive = active.status === 'open'
   const isDone = !!results || active.status === 'closed'
 
+  // speed 모드는 신호 전에도 누를 수 있게 둔다(부정출발 = 실격). submitted/실격으로만 차단.
   const btnDisabled =
     !isActive ||
     isDone ||
-    (mode === 'speed' && !signalReceived) ||
     (mode === 'count' && (timeLeft ?? 0) <= 0) ||
     (mode !== 'count' && submitted)
 
@@ -238,6 +252,11 @@ export default function TapPanel({ sessionId, round }: Props) {
         </div>
       )}
 
+      {/* timing 모드: 목표 초를 진행 내내 노출 */}
+      {mode === 'timing' && isActive && !isDone && active.target_time != null && (
+        <div className="tap-target">🎯 목표: {active.target_time.toFixed(1)}초</div>
+      )}
+
       {/* 타이머 */}
       {mode === 'count' && isActive && !isDone && (
         <div className="tap-timer">{(timeLeft ?? active.duration ?? 0).toFixed(1)}s</div>
@@ -260,7 +279,10 @@ export default function TapPanel({ sessionId, round }: Props) {
         </button>
       )}
 
-      {submitted && !isDone && mode === 'speed' && myValue !== null && (
+      {disqualified && !isDone && (
+        <p className="tap-feedback tap-dq">❌ 실격 — 신호 전에 눌렀습니다</p>
+      )}
+      {submitted && !disqualified && !isDone && mode === 'speed' && myValue !== null && (
         <p className="tap-feedback">반응: {myValue}ms — 결과를 기다리는 중…</p>
       )}
       {submitted && !isDone && mode === 'timing' && myValue !== null && (
@@ -288,12 +310,12 @@ export default function TapPanel({ sessionId, round }: Props) {
               {results.map((r) => (
                 <tr
                   key={r.user_id}
-                  className={`tap-result-row${r.rank === 1 ? ' tap-rank-1' : ''}`}
+                  className={`tap-result-row${r.rank === 1 && !r.disqualified ? ' tap-rank-1' : ''}${r.disqualified ? ' tap-dq-row' : ''}`}
                 >
-                  <td>{r.rank}</td>
+                  <td>{r.disqualified ? '—' : r.rank}</td>
                   <td>{r.nickname}</td>
                   <td>{r.team_name ?? '—'}</td>
-                  <td>{formatValue(mode, r.value)}</td>
+                  <td>{r.disqualified ? '실격' : formatValue(mode, r.value)}</td>
                 </tr>
               ))}
             </tbody>
