@@ -60,6 +60,19 @@ class TapResult(BaseModel):
     team_name: str | None
     value: float
     rank: int
+    disqualified: bool = False
+
+
+class QuizSubmissionRead(BaseModel):
+    """button/vote 라운드 제출 1건 (운영자 채점용)."""
+
+    user_id: int
+    nickname: str
+    team_id: int | None
+    team_name: str | None
+    answer: str
+    is_correct: bool
+    server_time: datetime
 
 
 class RoundReveal(BaseModel):

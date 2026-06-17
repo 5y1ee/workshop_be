@@ -46,7 +46,12 @@ function cleanGameLabel(label: string): string {
   return label.replace(/^\s*\d+\.\s*/, '')
 }
 
-export default function MainPage() {
+interface Props {
+  /** AppShell 에서 메인 탭 재클릭 시 증가 — 게임 상세에서 첫 화면으로 복귀시키는 신호 */
+  resetSignal?: number
+}
+
+export default function MainPage({ resetSignal }: Props) {
   const { token } = useAuth()
   const t = token as string
   const { seasonId } = useSeason()
@@ -56,6 +61,12 @@ export default function MainPage() {
   const [games, setGames] = useState<Record<number, Game>>({})
   const [sessions, setSessions] = useState<Record<number, GameSession | null>>({})
   const [selected, setSelected] = useState<TimetableEntry | null>(null)
+
+  // 메인 탭을 다시 누르면 게임 상세(GameDetail)에서 메인 지도 첫 화면으로 복귀
+  useEffect(() => {
+    if (resetSignal === undefined) return
+    setSelected(null)
+  }, [resetSignal])
 
   // 게임 목록 (id → 제목)
   useEffect(() => {

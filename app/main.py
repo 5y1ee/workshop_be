@@ -15,6 +15,7 @@ from app.api import (
     game_session,
     hidden_role,
     notice,
+    quiz_catalog,
     result,
     reward,
     roulette,
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(timetable.router, prefix="/api")
     app.include_router(game_session.router, prefix="/api")
     app.include_router(game_round.router, prefix="/api")
+    app.include_router(quiz_catalog.router, prefix="/api")
     app.include_router(hidden_role.router, prefix="/api")
     app.include_router(notice.router, prefix="/api")
     app.include_router(buff.router, prefix="/api")

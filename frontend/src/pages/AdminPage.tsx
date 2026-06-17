@@ -23,6 +23,7 @@ import {
   type HiddenRole,
   type HiddenRoleAssignment,
   type Notice,
+  type QuizCatalog,
   type Reward,
   type RewardClaimDetail,
   type SeasonMembership,
@@ -150,7 +151,7 @@ export default function AdminPage({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [adminTab, setAdminTab] = useState<
-    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs' | 'notices' | 'reset'
+    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs' | 'notices' | 'quiz' | 'reset'
   >('teams')
   const [resetConfirm, setResetConfirm] = useState('')
   const [resetMessage, setResetMessage] = useState<string | null>(null)
@@ -351,6 +352,42 @@ export default function AdminPage({ onClose }: Props) {
     api.notices(t, seasonId).then(setNotices).catch(() => setNotices([]))
   }, [t, seasonId])
   useEffect(loadNotices, [loadNotices])
+
+  // ---------- 퀴즈 문제 데이터 ----------
+  const [quizCatalog, setQuizCatalog] = useState<QuizCatalog | null>(null)
+  const [quizCats, setQuizCats] = useState<string[]>([])
+  const [quizLimit, setQuizLimit] = useState('20')
+  const [quizCreateSession, setQuizCreateSession] = useState(true)
+  const [quizMessage, setQuizMessage] = useState<string | null>(null)
+  const [quizOpenCat, setQuizOpenCat] = useState<string | null>(null)
+
+  const loadQuizCatalog = useCallback(() => {
+    api.quizCatalog(t).then(setQuizCatalog).catch(() => setQuizCatalog(null))
+  }, [t])
+  useEffect(loadQuizCatalog, [loadQuizCatalog])
+
+  const toggleQuizCat = (name: string) =>
+    setQuizCats((prev) =>
+      prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name],
+    )
+
+  const seedQuiz = (
+    opts: { categories?: string[]; limit?: number; shuffle?: boolean; replace?: boolean },
+  ) =>
+    run(async () => {
+      if (seasonId == null) throw new ApiError(400, '먼저 시즌을 선택하세요.')
+      setQuizMessage(null)
+      const res = await api.quizSeed(t, {
+        season_id: seasonId,
+        create_session: quizCreateSession,
+        ...opts,
+      })
+      setQuizMessage(
+        `✅ ${res.seeded}문제 적재 (세션 #${res.session_id}, 순서 ${res.start_order}~)` +
+          (res.removed ? ` · 기존 대기 ${res.removed}개 교체` : ''),
+      )
+      loadEntries()
+    })
 
   const teamOf = (userId: number) =>
     memberships.find((m) => m.user_id === userId)?.team_id ?? null
@@ -777,6 +814,9 @@ export default function AdminPage({ onClose }: Props) {
             <button className={adminTab === 'notices' ? 'on' : 'off'} onClick={() => setAdminTab('notices')}>
               공지
             </button>
+            <button className={adminTab === 'quiz' ? 'on' : 'off'} onClick={() => setAdminTab('quiz')}>
+              문제 데이터
+            </button>
             <button className={adminTab === 'season' ? 'on' : 'off'} onClick={() => setAdminTab('season')}>
               시즌·뽑기
             </button>
@@ -863,6 +903,143 @@ export default function AdminPage({ onClose }: Props) {
                     </div>
                   ))
                 )}
+              </div>
+            </>
+          ) : adminTab === 'quiz' ? (
+            <>
+              <h3 className="sec-title">문제 데이터 — 퀴즈 대결</h3>
+              <p className="muted" style={{ margin: '0 0 10px' }}>
+                준비된 객관식 문제를 <b>퀴즈 대결</b> 세션에 대기 라운드로 적재합니다.
+                {quizCatalog && ` (총 ${quizCatalog.total}문제 · ${quizCatalog.categories.length}개 카테고리)`}
+              </p>
+
+              {/* 적재 옵션 */}
+              <label className="quiz-opt">
+                <input
+                  type="checkbox"
+                  checked={quizCreateSession}
+                  onChange={(e) => setQuizCreateSession(e.target.checked)}
+                />
+                <span>세션이 없으면 새로 생성</span>
+              </label>
+
+              {/* 모드 버튼 + 설명 */}
+              <div className="quiz-modes">
+                <div className="quiz-mode-row all">
+                  <button
+                    className="op-btn"
+                    disabled={busy || !quizCatalog}
+                    onClick={() => seedQuiz({})}
+                  >
+                    전체 적재
+                  </button>
+                  <span className="muted">
+                    모든 문제{quizCatalog ? ` ${quizCatalog.total}개` : ''}를 대기 라운드로 추가합니다.
+                  </span>
+                </div>
+
+                <div className="quiz-mode-row random">
+                  <button
+                    className="op-btn"
+                    disabled={busy}
+                    onClick={() => seedQuiz({ limit: Number(quizLimit) || 1, shuffle: true })}
+                  >
+                    무작위 적재
+                  </button>
+                  <span className="muted">
+                    무작위로 섞어
+                    <input
+                      className="quiz-limit"
+                      type="number"
+                      min={1}
+                      value={quizLimit}
+                      onChange={(e) => setQuizLimit(e.target.value)}
+                    />
+                    문제만 추가합니다.
+                  </span>
+                </div>
+
+                <div className="quiz-mode-row category">
+                  <button
+                    className="op-btn"
+                    disabled={busy || quizCats.length === 0}
+                    onClick={() => seedQuiz({ categories: quizCats })}
+                  >
+                    카테고리 적재
+                  </button>
+                  <span className="muted">
+                    아래에서 고른 카테고리 문제만 추가합니다. {quizCats.length > 0 && `(${quizCats.length}개 선택)`}
+                  </span>
+                </div>
+
+                <div className="quiz-mode-row replace">
+                  <button
+                    className="op-btn"
+                    disabled={busy || !quizCatalog}
+                    onClick={() => {
+                      if (confirm('기존 대기 라운드를 삭제하고 전체 문제를 다시 적재할까요?')) {
+                        seedQuiz({ replace: true })
+                      }
+                    }}
+                  >
+                    교체 적재
+                  </button>
+                  <span className="muted">제출 기록 없는 기존 대기 라운드를 지운 뒤 전체를 다시 추가합니다.</span>
+                </div>
+              </div>
+
+              {quizMessage && <p className="quiz-seed-msg">{quizMessage}</p>}
+
+              {/* 카테고리 선택 */}
+              <h3 className="sec-title">카테고리</h3>
+              <div className="quiz-cat-list">
+                {(quizCatalog?.categories ?? []).map((c) => (
+                  <label key={c.name} className={`quiz-cat-chip${quizCats.includes(c.name) ? ' on' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={quizCats.includes(c.name)}
+                      onChange={() => toggleQuizCat(c.name)}
+                    />
+                    <span>{c.name}</span>
+                    <em>{c.count}</em>
+                  </label>
+                ))}
+              </div>
+
+              {/* 문제 목록 (카테고리별 펼치기) */}
+              <h3 className="sec-title">문제 미리보기</h3>
+              <div className="admin-list">
+                {(quizCatalog?.categories ?? []).map((c) => {
+                  const open = quizOpenCat === c.name
+                  const qs = (quizCatalog?.questions ?? []).filter((q) => q.category === c.name)
+                  return (
+                    <div key={c.name} style={{ marginBottom: 4 }}>
+                      <button
+                        className="row-main quiz-cat-toggle"
+                        onClick={() => setQuizOpenCat(open ? null : c.name)}
+                      >
+                        <b>{open ? '▼' : '▶'} {c.name}</b>
+                        <span className="chip">{c.count}문제</span>
+                      </button>
+                      {open && (
+                        <ol className="quiz-q-list">
+                          {qs.map((q, i) => (
+                            <li key={i} className="quiz-q-item">
+                              <div className="quiz-q-prompt">{q.prompt}</div>
+                              <div className="quiz-q-options">
+                                {q.options.map((o, j) => (
+                                  <span key={j} className={`quiz-q-opt${o === q.answer ? ' answer' : ''}`}>
+                                    {o}
+                                  </span>
+                                ))}
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </>
           ) : adminTab === 'users' ? (

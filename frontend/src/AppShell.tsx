@@ -18,7 +18,7 @@ const TABS: { key: Tab; icon: string; label: string; center?: boolean }[] = [
   { key: 'ranking', icon: '🏆', label: '랭킹' },
   { key: 'main', icon: '⚡', label: '메인', center: true },
   { key: 'dex', icon: '📕', label: '도감' },
-  { key: 'mini', icon: '🎲', label: '미니' },
+  { key: 'mini', icon: '🎰', label: '뽑기' },
 ]
 
 export default function AppShell() {
@@ -27,6 +27,8 @@ export default function AppShell() {
   const { connected } = useLive()
   const [tab, setTab] = useState<Tab>('main')
   const [adminOpen, setAdminOpen] = useState(false)
+  // 메인 탭을 (이미 메인에 있을 때) 다시 누르면 MainPage 를 첫 화면으로 되돌리기 위한 신호
+  const [mainReset, setMainReset] = useState(0)
   const isAdmin = user?.role === 'admin'
 
   return (
@@ -73,7 +75,7 @@ export default function AppShell() {
           <>
             {tab === 'my' && <MyPage onBack={() => setTab('main')} />}
             {tab === 'ranking' && <RankingPage />}
-            {tab === 'main' && <MainPage />}
+            {tab === 'main' && <MainPage resetSignal={mainReset} />}
             {tab === 'dex' && <DexPage />}
             {tab === 'mini' && <MiniGamePage />}
           </>
@@ -86,6 +88,10 @@ export default function AppShell() {
             key={t.key}
             className={`tab${tab === t.key && !adminOpen ? ' active' : ''}${t.center ? ' center' : ''}`}
             onClick={() => {
+              // 메인 탭을 이미 메인 화면에서 다시 누르면 게임 상세에서 메인 첫 화면으로 복귀
+              if (t.key === 'main' && tab === 'main' && !adminOpen) {
+                setMainReset((n) => n + 1)
+              }
               setTab(t.key)
               setAdminOpen(false)
             }}

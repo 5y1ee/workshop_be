@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DbSession
+from app.schemas.notice import NoticeCreate
 from app.schemas.reward import RewardRead
-from app.services import gacha_service
+from app.services import gacha_service, notice_service
 from app.services.reward_claim_service import count_claims
 from app.websocket import events as ws_events
 
@@ -45,6 +46,18 @@ async def pull_gacha(
             claimed_count=claimed_count,
             total_count=reward.total_count,
         )
+
+        # 당첨 사실을 1분짜리 공지로 자동 등록 (기존 공지 시스템 재사용)
+        notice = await notice_service.create_notice(
+            db,
+            season_id,
+            NoticeCreate(
+                message=f"🎰 {user.nickname} 님이 '{reward.name}' 을(를) 뽑았어요!",
+                duration_minutes=1,
+            ),
+            admin_id=user.id,
+        )
+        await ws_events.broadcast_notice_created(notice)
 
     return GachaPullResponse(
         is_win=is_win,

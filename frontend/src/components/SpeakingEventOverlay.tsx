@@ -23,6 +23,7 @@ interface SubmittedRow {
   team_name: string | null
   value: number
   arrived_at: number
+  disqualified?: boolean
 }
 
 function parseUtcMs(iso: string): number {
@@ -74,6 +75,7 @@ export default function SpeakingEventOverlay() {
   const [showTimer, setShowTimer] = useState(true)
   const [submitted, setSubmitted] = useState(false)
   const [myValue, setMyValue] = useState<number | null>(null)
+  const [disqualified, setDisqualified] = useState(false)
 
   const [liveCounts, setLiveCounts] = useState<CountRow[]>([])
   const [liveSubmits, setLiveSubmits] = useState<SubmittedRow[]>([])
@@ -117,6 +119,13 @@ export default function SpeakingEventOverlay() {
         return
       }
 
+      // speed 모드: 신호 전에 눌러 실격됨 (서버 확정)
+      if (e.type === 'speaking_disqualified' && e.event_id === active?.id) {
+        setDisqualified(true)
+        setSubmitted(true)
+        return
+      }
+
       if (e.type === 'speaking_progress' && e.event_id === active?.id) {
         setLiveCounts((e.counts as CountRow[]) ?? [])
         return
@@ -129,6 +138,7 @@ export default function SpeakingEventOverlay() {
           team_name: (e.team_name as string | null) ?? null,
           value: e.value as number,
           arrived_at: Date.now(),
+          disqualified: (e.disqualified as boolean | undefined) ?? false,
         }
         setLiveSubmits((prev) => [...prev.filter((p) => p.user_id !== row.user_id), row])
         return
@@ -175,6 +185,7 @@ export default function SpeakingEventOverlay() {
     setShowTimer(true)
     setSubmitted(false)
     setMyValue(null)
+    setDisqualified(false)
     setLiveCounts([])
     setLiveSubmits([])
   }, [active?.id])
@@ -306,7 +317,13 @@ export default function SpeakingEventOverlay() {
     }
     if (submitted) return
     if (active.mode === 'speed') {
-      if (!signalReceived || signalTimeRef.current == null) return
+      // 신호('지금!') 전에 누르면 부정출발 → 실격
+      if (!signalReceived || signalTimeRef.current == null) {
+        send({ type: 'speaking_false_start', event_id: active.id })
+        setDisqualified(true)
+        setSubmitted(true)
+        return
+      }
       const value = Date.now() - signalTimeRef.current
       setMyValue(value)
       setSubmitted(true)
@@ -320,11 +337,11 @@ export default function SpeakingEventOverlay() {
   }
 
   const isOpen = active?.status === 'open'
+  // speed 모드는 신호 전에도 누를 수 있게 둔다(부정출발 = 실격). submitted/실격으로만 차단.
   const buttonDisabled =
     !active ||
     !isOpen ||
     (active.mode === 'count' && (timeLeft ?? 0) <= 0) ||
-    (active.mode === 'speed' && !signalReceived) ||
     (active.mode !== 'count' && submitted)
 
   return (
@@ -346,6 +363,9 @@ export default function SpeakingEventOverlay() {
 
             {active.mode === 'count' && isOpen && (
               <div className="speaking-timer">{(timeLeft ?? active.duration ?? 0).toFixed(1)}s</div>
+            )}
+            {active.mode === 'timing' && isOpen && active.target_time != null && (
+              <p className="speaking-target">🎯 목표: {active.target_time.toFixed(1)}초</p>
             )}
             {active.mode === 'timing' && isOpen && showTimer && (
               <div className="speaking-timer">{elapsed.toFixed(1)}s</div>
@@ -374,7 +394,10 @@ export default function SpeakingEventOverlay() {
               <p className="speaking-status">결과 확인 및 발언권 부여</p>
             )}
 
-            {submitted && active.mode === 'speed' && myValue != null && (
+            {disqualified && (
+              <p className="speaking-feedback speaking-dq">❌ 실격 — 신호 전에 눌렀습니다</p>
+            )}
+            {!disqualified && submitted && active.mode === 'speed' && myValue != null && (
               <p className="speaking-feedback">반응: {Math.round(myValue)}ms</p>
             )}
             {submitted && active.mode === 'timing' && myValue != null && (
@@ -535,11 +558,11 @@ function SubmitTable({ submits, mode }: { submits: SubmittedRow[]; mode: Speakin
           .slice()
           .sort((a, b) => a.arrived_at - b.arrived_at)
           .map((s, i) => (
-            <tr key={s.user_id}>
-              <td>{i + 1}</td>
+            <tr key={s.user_id} className={s.disqualified ? 'speaking-dq-row' : ''}>
+              <td>{s.disqualified ? '—' : i + 1}</td>
               <td>{s.nickname}</td>
               <td>{s.team_name ?? '-'}</td>
-              <td>{formatValue(mode, s.value)}</td>
+              <td>{s.disqualified ? '실격' : formatValue(mode, s.value)}</td>
             </tr>
           ))}
       </tbody>
@@ -553,11 +576,11 @@ function ResultTable({ results, mode }: { results: SpeakingResult[]; mode: Speak
     <table className="speaking-table result">
       <tbody>
         {results.slice(0, 5).map((r) => (
-          <tr key={r.user_id} className={r.granted ? 'granted' : ''}>
-            <td>{r.rank}</td>
+          <tr key={r.user_id} className={`${r.granted ? 'granted' : ''}${r.disqualified ? ' speaking-dq-row' : ''}`}>
+            <td>{r.disqualified ? '—' : r.rank}</td>
             <td>{r.nickname}</td>
             <td>{r.team_name ?? '-'}</td>
-            <td>{formatValue(mode, r.value)}</td>
+            <td>{r.disqualified ? '실격' : formatValue(mode, r.value)}</td>
           </tr>
         ))}
       </tbody>
@@ -581,14 +604,18 @@ function GrantTable({
     <table className="speaking-table grant">
       <tbody>
         {results.map((r) => (
-          <tr key={r.user_id}>
-            <td>{r.rank}</td>
+          <tr key={r.user_id} className={r.disqualified ? 'speaking-dq-row' : ''}>
+            <td>{r.disqualified ? '—' : r.rank}</td>
             <td>{r.nickname}</td>
-            <td>{formatValue(mode, r.value)}</td>
+            <td>{r.disqualified ? '실격' : formatValue(mode, r.value)}</td>
             <td>
-              <button className="mini-btn" disabled={busy || r.granted} onClick={() => onGrant(r)}>
-                {r.granted ? '부여됨' : '부여'}
-              </button>
+              {r.disqualified ? (
+                <span className="muted">실격</span>
+              ) : (
+                <button className="mini-btn" disabled={busy || r.granted} onClick={() => onGrant(r)}>
+                  {r.granted ? '부여됨' : '부여'}
+                </button>
+              )}
             </td>
           </tr>
         ))}

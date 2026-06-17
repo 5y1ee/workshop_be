@@ -6,6 +6,7 @@ from app.api.deps import AdminUser, CurrentUser, DbSession
 from app.models.game_round import GameRound
 from app.schemas.game_round import (
     ChatLogRead,
+    QuizSubmissionRead,
     RoundCreate,
     RoundRead,
     RoundReveal,
@@ -217,7 +218,7 @@ async def close_round(
 
 @router.post("/rounds/{round_id}/signal", status_code=status.HTTP_202_ACCEPTED)
 async def send_tap_signal(round_id: int, db: DbSession, admin: AdminUser) -> dict:
-    """speed 모드: 랜덤 딜레이(1~3초) 후 tap_signal 이벤트 발사."""
+    """speed 모드: 랜덤 딜레이(3~5초) 후 tap_signal 이벤트 발사."""
     round_ = await _get_round_or_404(db, round_id)
     if round_.tap_mode != "speed":
         raise HTTPException(
@@ -231,6 +232,17 @@ async def send_tap_signal(round_id: int, db: DbSession, admin: AdminUser) -> dic
         )
     asyncio.create_task(game_round_service._send_tap_signal(round_.id))
     return {"status": "signaling"}
+
+
+@router.get(
+    "/rounds/{round_id}/submissions", response_model=list[QuizSubmissionRead]
+)
+async def list_round_submissions(
+    round_id: int, db: DbSession, admin: AdminUser
+) -> list[dict]:
+    """button/vote 라운드 제출 목록 (운영자 채점용)."""
+    round_ = await _get_round_or_404(db, round_id)
+    return await game_round_service.list_submissions(db, round_)
 
 
 @router.get("/rounds/{round_id}/reveal", response_model=RoundReveal)

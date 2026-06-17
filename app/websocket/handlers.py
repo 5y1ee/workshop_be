@@ -177,6 +177,11 @@ async def _handle_tap_press(ctx: MessageContext, data: dict[str, Any]) -> None:
             await _error(ctx, "tap 게임 라운드가 아닙니다.")
             return
 
+        # speed 모드: 신호(signal_at) 전에 누르면 부정출발 → 실격 처리
+        if round_.tap_mode == "speed" and round_.signal_at is None:
+            await _disqualify_tap(ctx, db, round_)
+            return
+
         try:
             if round_.tap_mode == "count":
                 await game_round_service.record_tap_count(db, round_, ctx.user_id)
@@ -207,6 +212,49 @@ async def _handle_tap_press(ctx: MessageContext, data: dict[str, Any]) -> None:
     await ctx.websocket.send_json({"type": "tap_accepted", "round_id": round_id})
 
 
+@register("tap_false_start")
+async def _handle_tap_false_start(ctx: MessageContext, data: dict[str, Any]) -> None:
+    """speed 모드 부정출발: 신호('지금!') 전에 버튼을 누른 사용자를 실격 처리.
+
+    프런트가 신호 전 입력을 명시적으로 보낸다. 서버는 speed 모드 + open 상태에서만
+    실격을 기록한다.
+    """
+    round_id = data.get("round_id")
+    if not isinstance(round_id, int):
+        await _error(ctx, "round_id(정수)가 필요합니다.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        round_ = await game_round_service.get_round(db, round_id)
+        if round_ is None or round_.tap_mode != "speed":
+            return
+        await _disqualify_tap(ctx, db, round_)
+
+
+async def _disqualify_tap(ctx: MessageContext, db: Any, round_: Any) -> None:
+    """speed 부정출발 실격을 기록하고 본인 + 운영자에게 알린다 (중복 시 무시)."""
+    try:
+        await game_round_service.record_tap_disqualify(db, round_, ctx.user_id)
+    except RoundConflict:
+        # 이미 실격/제출됨 → 조용히 무시
+        return
+    info = await game_round_service._user_info(db, round_)
+    who = info.get(ctx.user_id, {"nickname": f"user#{ctx.user_id}", "team_name": None})
+    await broadcast_tap_submitted(
+        session_id=round_.session_id,
+        round_id=round_.id,
+        user_id=ctx.user_id,
+        nickname=who["nickname"],
+        team_name=who["team_name"],
+        value=0.0,
+        tap_mode="speed",
+        disqualified=True,
+    )
+    await ctx.websocket.send_json(
+        {"type": "tap_disqualified", "round_id": round_.id}
+    )
+
+
 @register("speaking_press")
 async def _handle_speaking_press(ctx: MessageContext, data: dict[str, Any]) -> None:
     """전역 발언권 이벤트 버튼 입력."""
@@ -220,6 +268,11 @@ async def _handle_speaking_press(ctx: MessageContext, data: dict[str, Any]) -> N
         event = await speaking_service.get_event(db, event_id)
         if event is None:
             await _error(ctx, "발언권 이벤트를 찾을 수 없습니다.")
+            return
+
+        # speed 모드: 신호(signal_at) 전에 누르면 부정출발 → 실격 처리
+        if event.mode == "speed" and event.signal_at is None:
+            await _disqualify_speaking(ctx, db, event)
             return
 
         try:
@@ -247,3 +300,40 @@ async def _handle_speaking_press(ctx: MessageContext, data: dict[str, Any]) -> N
             )
 
     await ctx.websocket.send_json({"type": "speaking_accepted", "event_id": event_id})
+
+
+@register("speaking_false_start")
+async def _handle_speaking_false_start(ctx: MessageContext, data: dict[str, Any]) -> None:
+    """발언권 speed 모드 부정출발: 신호 전에 버튼을 누른 사용자를 실격 처리."""
+    event_id = data.get("event_id")
+    if not isinstance(event_id, int):
+        await _error(ctx, "event_id(정수)가 필요합니다.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        event = await speaking_service.get_event(db, event_id)
+        if event is None or event.mode != "speed":
+            return
+        await _disqualify_speaking(ctx, db, event)
+
+
+async def _disqualify_speaking(ctx: MessageContext, db: Any, event: Any) -> None:
+    """발언권 speed 부정출발 실격을 기록하고 본인 + 운영자에게 알린다 (중복 시 무시)."""
+    try:
+        await speaking_service.record_disqualify(db, event, ctx.user_id)
+    except SpeakingConflict:
+        return
+    who = await speaking_service.user_info_for_event(db, event, ctx.user_id)
+    await broadcast_speaking_submitted(
+        season_id=event.season_id,
+        event_id=event.id,
+        user_id=ctx.user_id,
+        nickname=who["nickname"],
+        team_name=who["team_name"],
+        value=0.0,
+        mode="speed",
+        disqualified=True,
+    )
+    await ctx.websocket.send_json(
+        {"type": "speaking_disqualified", "event_id": event.id}
+    )
