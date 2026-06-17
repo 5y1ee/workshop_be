@@ -145,7 +145,7 @@ async def seed() -> None:
                 TeamMembership(season_id=season.id, team_id=team.id, user_id=u.id)
             )
 
-        # --- 게임 9개 ---
+        # --- 게임 11개 ---
         games_def = [
             ("몸으로 말해요", "제스처로 단어 맞히기", "team_vs", "offline"),
             ("퀴즈 대결", "버저 누르고 정답", "team_vs", "button"),
@@ -212,8 +212,6 @@ async def seed() -> None:
         chat_rounds = [
             ("이 노래 제목은? 🎵 (힌트: BTS, 봄을 노래)", "봄날"),
             ("이 노래 제목은? 🎵 (힌트: 아이유, 잔잔한 밤)", "밤편지"),
-            ("이 노래 제목은? 🎵 (힌트: 버스커버스커, 봄 대표곡)", "벚꽃엔딩"),
-            ("이 노래 제목은? 🎵 (힌트: 잔나비)", "주저하는 연인들을 위해"),
         ]
 
         def _round(session_id, order, prompt, options, answer):
@@ -287,7 +285,7 @@ async def seed() -> None:
     print("   - 시즌 '가평 워크샵 2026' (active)")
     print("   - 팀 3 / 참가자 18 / 게임 9 / 타임테이블 9")
     print("   - 세션: 종료 1(점수+결과), 진행중 2(button/chat 각 4라운드), 대기 6")
-    print("   - 라운드: 퀴즈대결(button)·노래맞추기(chat) 각 4문제")
+    print("   - 라운드: 퀴즈대결(button) 4문제·노래맞추기(chat) 2문제")
     print("   - 리워드 6 (공개 3 / 실루엣 3)")
     print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
     print("   - 참가자 예시: sanghee/sanghee1234")
