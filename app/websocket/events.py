@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from app.models.game_round import GameRound
 from app.models.game_session import GameChatLog, GameResult, GameScoreLog, GameSession
+from app.models.notice import Notice
 from app.models.speaking import SpeakingEvent, SpeakingGrant
 from app.websocket.manager import manager
 
@@ -108,7 +109,7 @@ async def broadcast_result_recorded(result: GameResult) -> None:
     )
 
 
-async def broadcast_round_started(round_: GameRound) -> None:
+async def broadcast_round_started(round_: GameRound, reveal_prompt: bool = True) -> None:
     """라운드 오픈을 같은 세션 접속자에게 알린다. 정답(correct_answer)은 비노출.
 
     tap 게임은 클라이언트가 fetch 없이도 즉시 패널을 띄울 수 있도록 추가 필드 포함.
@@ -121,15 +122,31 @@ async def broadcast_round_started(round_: GameRound) -> None:
             "session_id": round_.session_id,
             "round_id": round_.id,
             "order_index": round_.order_index,
-            "prompt": round_.prompt,
+            "prompt": round_.prompt if reveal_prompt else None,
             "media_url": round_.media_url,
             "options": round_.options,
+            "hint_revealed": round_.hint_revealed,
             # 추가 — tap 게임 시작 동기화에 필요
             "tap_mode": round_.tap_mode,
             "duration": round_.duration,
             "target_time": round_.target_time,
             "opened_at": _iso_utc(round_.opened_at),
             "status": round_.status,
+        },
+    )
+
+
+async def broadcast_round_hint_revealed(round_: GameRound) -> None:
+    """chat 라운드 힌트 공개를 같은 세션 접속자에게 알린다."""
+    await manager.broadcast_to_session(
+        round_.session_id,
+        {
+            "type": "round_hint_revealed",
+            "session_id": round_.session_id,
+            "round_id": round_.id,
+            "order_index": round_.order_index,
+            "prompt": round_.prompt,
+            "hint_revealed": round_.hint_revealed,
         },
     )
 
@@ -149,6 +166,35 @@ async def broadcast_round_revealed(
             "total_submissions": total_submissions,
             "distribution": distribution,
         },
+    )
+
+
+async def broadcast_notice_created(notice: Notice) -> None:
+    """시즌 공지 생성/교체를 전체 접속자에게 전파."""
+    await manager.broadcast(
+        {
+            "type": "notice_created",
+            "notice": {
+                "id": notice.id,
+                "season_id": notice.season_id,
+                "message": notice.message,
+                "expires_at": _iso_utc(notice.expires_at),
+                "created_by": notice.created_by,
+                "deleted_at": _iso_utc(notice.deleted_at),
+                "created_at": _iso_utc(notice.created_at),
+            },
+        }
+    )
+
+
+async def broadcast_notice_deleted(season_id: int, notice_id: int) -> None:
+    """시즌 공지 삭제를 전체 접속자에게 전파."""
+    await manager.broadcast(
+        {
+            "type": "notice_deleted",
+            "season_id": season_id,
+            "notice_id": notice_id,
+        }
     )
 
 
