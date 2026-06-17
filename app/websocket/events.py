@@ -318,6 +318,7 @@ async def broadcast_tap_closed(
                     "team_name": r.team_name,
                     "value": r.value,
                     "rank": r.rank,
+                    "disqualified": r.disqualified,
                 }
                 for r in results
             ],
@@ -352,10 +353,12 @@ async def broadcast_tap_submitted(
     team_name: str | None,
     value: float,
     tap_mode: str,
+    disqualified: bool = False,
 ) -> None:
     """speed/timing 모드: 운영자에게만 제출 사실 + 기록 즉시 송신.
 
     value 의미: speed=반응시간(ms), timing=경과 초(0.1 단위).
+    disqualified=True 이면 신호 전 입력으로 실격된 제출.
     공정성을 위해 참가자에게는 전달하지 않는다.
     """
     await manager.broadcast_to_session_admins(
@@ -369,6 +372,7 @@ async def broadcast_tap_submitted(
             "team_name": team_name,
             "value": value,
             "tap_mode": tap_mode,
+            "disqualified": disqualified,
         },
     )
 
@@ -423,6 +427,7 @@ async def broadcast_speaking_event_closed(
                     "value": r.value,
                     "rank": r.rank,
                     "granted": r.granted,
+                    "disqualified": r.disqualified,
                 }
                 for r in results
             ],
@@ -452,8 +457,12 @@ async def broadcast_speaking_submitted(
     team_name: str | None,
     value: float,
     mode: str,
+    disqualified: bool = False,
 ) -> None:
-    """발언권 speed/timing 제출 도착을 운영자에게만 송신."""
+    """발언권 speed/timing 제출 도착을 운영자에게만 송신.
+
+    disqualified=True 이면 신호 전 입력으로 실격된 제출.
+    """
     await manager.broadcast_to_admins(
         {
             "type": "speaking_submitted",
@@ -464,6 +473,7 @@ async def broadcast_speaking_submitted(
             "team_name": team_name,
             "value": value,
             "mode": mode,
+            "disqualified": disqualified,
         }
     )
 
