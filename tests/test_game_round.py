@@ -96,8 +96,73 @@ async def test_round_create_hides_correct_answer(client, admin_headers):
     body = res.json()
     assert body["status"] == "waiting"
     assert body["options"] == ["서울", "부산"]
+    assert body["hint_revealed"] is False
     # 정답은 룰렛 seed 처럼 플레이어 응답에서 비노출
     assert "correct_answer" not in body
+
+
+async def test_chat_round_hint_hidden_for_user_until_revealed(
+    client, admin_headers, user_headers, monkeypatch
+):
+    from app.websocket import events
+
+    calls: list[tuple[int, dict]] = []
+
+    async def fake_broadcast_to_session(session_id: int, message: dict) -> None:
+        calls.append((session_id, message))
+
+    monkeypatch.setattr(events.manager, "broadcast_to_session", fake_broadcast_to_session)
+
+    session_id = await _button_session(client, admin_headers, input_type="chat")
+    round_ = (
+        await _create_round(
+            client,
+            admin_headers,
+            session_id,
+            prompt="힌트: BTS, 봄",
+            correct_answer="봄날",
+        )
+    ).json()
+
+    admin_rows = (
+        await client.get(f"/api/sessions/{session_id}/rounds", headers=admin_headers)
+    ).json()
+    assert admin_rows[0]["prompt"] == "힌트: BTS, 봄"
+    assert admin_rows[0]["hint_revealed"] is False
+
+    user_rows = (
+        await client.get(f"/api/sessions/{session_id}/rounds", headers=user_headers)
+    ).json()
+    assert user_rows[0]["prompt"] is None
+    assert user_rows[0]["hint_revealed"] is False
+
+    denied = await client.post(
+        f"/api/rounds/{round_['id']}/hint/reveal", headers=user_headers
+    )
+    assert denied.status_code == 403
+
+    revealed = await client.post(
+        f"/api/rounds/{round_['id']}/hint/reveal", headers=admin_headers
+    )
+    assert revealed.status_code == 200
+    assert revealed.json()["hint_revealed"] is True
+
+    user_rows = (
+        await client.get(f"/api/sessions/{session_id}/rounds", headers=user_headers)
+    ).json()
+    assert user_rows[0]["prompt"] == "힌트: BTS, 봄"
+    assert user_rows[0]["hint_revealed"] is True
+    assert calls[-1] == (
+        session_id,
+        {
+            "type": "round_hint_revealed",
+            "session_id": session_id,
+            "round_id": round_["id"],
+            "order_index": 1,
+            "prompt": "힌트: BTS, 봄",
+            "hint_revealed": True,
+        },
+    )
 
 
 async def test_only_one_open_round_per_session(client, admin_headers):
