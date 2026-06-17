@@ -49,6 +49,7 @@ function SortableEntryRow({
   id,
   order,
   title,
+  modeLabel,
   mainVisible,
   busy,
   onToggleVisible,
@@ -57,6 +58,7 @@ function SortableEntryRow({
   id: number
   order: number
   title: string
+  modeLabel: string
   mainVisible: boolean
   busy: boolean
   onToggleVisible: (id: number, nextVisible: boolean) => void
@@ -81,6 +83,7 @@ function SortableEntryRow({
       </button>
       <span className="row-main">
         <b>{order}. {title}</b>
+        <span className="chip">{modeLabel}</span>
       </span>
       <button
         className={`mini-btn ${mainVisible ? '' : 'ghost'}`}
@@ -144,7 +147,9 @@ export default function AdminPage({ onClose }: Props) {
 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [adminTab, setAdminTab] = useState<'setup' | 'users' | 'hidden' | 'buffs'>('setup')
+  const [adminTab, setAdminTab] = useState<
+    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs'
+  >('teams')
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -413,6 +418,8 @@ export default function AdminPage({ onClose }: Props) {
   const [entries, setEntries] = useState<TimetableEntry[]>([])
   const [games, setGames] = useState<Game[]>([])
   const [pickGame, setPickGame] = useState('')
+  const [pickLabel, setPickLabel] = useState('')
+  const [pickScoreMode, setPickScoreMode] = useState<'' | 'team' | 'individual'>('')
   // 클릭(작은 움직임)은 드래그로 오인하지 않도록 8px 이동 후 드래그 시작
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -445,6 +452,29 @@ export default function AdminPage({ onClose }: Props) {
   }, [t])
   const sortedEntries = entries.slice().sort((a, b) => a.order_index - b.order_index)
 
+  // 같은 게임이 이미 타임테이블에 있으면 "제목 N"을 기본 라벨로 제안 (오프라인 게임 다회 진행용)
+  const suggestLabel = (gameId: string) => {
+    const g = games.find((x) => x.id === Number(gameId))
+    if (!g) return ''
+    const same = entries.filter((e) => e.game_id === Number(gameId)).length
+    return same > 0 ? `${g.title} ${same + 1}` : g.title
+  }
+
+  // 게임의 participant_type으로 팀전/개인전 기본값을 제안 (운영자가 바꿀 수 있음)
+  const defaultScoreMode = (gameId: string): '' | 'team' | 'individual' => {
+    const g = games.find((x) => x.id === Number(gameId))
+    if (!g) return ''
+    return g.participant_type === 'team_vs' || g.participant_type === 'representative'
+      ? 'team'
+      : 'individual'
+  }
+
+  const onPickGame = (gameId: string) => {
+    setPickGame(gameId)
+    setPickLabel(suggestLabel(gameId))
+    setPickScoreMode(defaultScoreMode(gameId))
+  }
+
   const addEntry = () =>
     run(async () => {
       if (seasonId == null) throw new ApiError(400, '먼저 시즌을 선택하세요.')
@@ -453,9 +483,12 @@ export default function AdminPage({ onClose }: Props) {
       await api.createTimetable(t, seasonId, {
         game_id: Number(pickGame),
         order_index: entries.length + 1,
-        label: game ? game.title : null,
+        label: pickLabel.trim() || (game ? game.title : null),
+        score_mode: pickScoreMode || null,
       })
       setPickGame('')
+      setPickLabel('')
+      setPickScoreMode('')
       loadEntries()
     })
 
@@ -559,6 +592,12 @@ export default function AdminPage({ onClose }: Props) {
   }
 
   const gameTitle = (id: number) => games.find((g) => g.id === id)?.title ?? `게임 #${id}`
+  // 타임테이블 항목의 스코어보드 집계 단위: score_mode 오버라이드 우선, 없으면 게임 기본값
+  const entryModeLabel = (en: TimetableEntry): string => {
+    const mode =
+      en.score_mode ?? (defaultScoreMode(String(en.game_id)) || 'team')
+    return mode === 'individual' ? '개인전' : '팀전'
+  }
   const teamName2 = (id: number | null) =>
     id == null ? '미배정' : teams.find((x) => x.id === id)?.name ?? `타 시즌 #${id}`
   const hiddenRoleOf = (userId: number) =>
@@ -627,8 +666,14 @@ export default function AdminPage({ onClose }: Props) {
       ) : (
         <>
           <div className="mini-tabs rank-tabs admin-tabs">
-            <button className={adminTab === 'setup' ? 'on' : 'off'} onClick={() => setAdminTab('setup')}>
-              기본 설정
+            <button className={adminTab === 'teams' ? 'on' : 'off'} onClick={() => setAdminTab('teams')}>
+              팀·유저
+            </button>
+            <button className={adminTab === 'timetable' ? 'on' : 'off'} onClick={() => setAdminTab('timetable')}>
+              타임테이블
+            </button>
+            <button className={adminTab === 'rewards' ? 'on' : 'off'} onClick={() => setAdminTab('rewards')}>
+              리워드
             </button>
             <button className={adminTab === 'users' ? 'on' : 'off'} onClick={() => setAdminTab('users')}>
               사용자 현황
@@ -638,6 +683,9 @@ export default function AdminPage({ onClose }: Props) {
             </button>
             <button className={adminTab === 'buffs' ? 'on' : 'off'} onClick={() => setAdminTab('buffs')}>
               버프/디버프
+            </button>
+            <button className={adminTab === 'season' ? 'on' : 'off'} onClick={() => setAdminTab('season')}>
+              시즌·뽑기
             </button>
           </div>
 
@@ -754,25 +802,10 @@ export default function AdminPage({ onClose }: Props) {
                 ))}
               </div>
             </>
-          ) : (
+          ) : adminTab === 'teams' ? (
             <>
-              <h3 className="sec-title">뽑기 설정</h3>
-              <div className="op-row" style={{ marginBottom: 12 }}>
-                <span className="muted" style={{ fontSize: 13 }}>1회 차감 포인트</span>
-                <input
-                  className="op-score"
-                  type="number"
-                  min={1}
-                  value={gachaCost}
-                  onChange={(e) => setGachaCost(e.target.value)}
-                />
-                <button className="op-btn" disabled={busy} onClick={saveGachaCost}>
-                  저장
-                </button>
-              </div>
-
-          {/* ② 팀 */}
-          <h3 className="sec-title">② 팀 (선택 시즌)</h3>
+          {/* 팀 */}
+          <h3 className="sec-title">팀 (선택 시즌)</h3>
           <div className="op-row">
             <input
               placeholder="새 팀 이름 (예: 🔴 레드팀)"
@@ -870,16 +903,32 @@ export default function AdminPage({ onClose }: Props) {
             ))}
           </div>
 
-          {/* ④ 타임테이블 */}
-          <h3 className="sec-title">④ 타임테이블</h3>
-          <div className="op-row">
-            <select value={pickGame} onChange={(e) => setPickGame(e.target.value)}>
+            </>
+          ) : adminTab === 'timetable' ? (
+            <>
+          {/* 타임테이블 */}
+          <h3 className="sec-title">타임테이블</h3>
+          <div className="op-row tt-add-row">
+            <select value={pickGame} onChange={(e) => onPickGame(e.target.value)}>
               <option value="">게임 선택</option>
               {games.filter((g) => g.input_type !== 'tap').map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
                 </option>
               ))}
+            </select>
+            <input
+              placeholder="게임 이름 (예: 오프라인 게임 2)"
+              value={pickLabel}
+              onChange={(e) => setPickLabel(e.target.value)}
+            />
+            <select
+              value={pickScoreMode}
+              onChange={(e) => setPickScoreMode(e.target.value as '' | 'team' | 'individual')}
+            >
+              <option value="">게임 기본</option>
+              <option value="team">팀전 (팀별 점수)</option>
+              <option value="individual">개인전 (개인별 점수)</option>
             </select>
             <button className="op-btn" disabled={busy} onClick={addEntry}>
               추가
@@ -906,6 +955,7 @@ export default function AdminPage({ onClose }: Props) {
                         id={en.id}
                         order={en.order_index}
                         title={en.label ?? gameTitle(en.game_id)}
+                        modeLabel={entryModeLabel(en)}
                         mainVisible={en.main_visible}
                         busy={busy}
                         onToggleVisible={toggleEntryVisible}
@@ -918,8 +968,11 @@ export default function AdminPage({ onClose }: Props) {
             </>
           )}
 
-          {/* ⑤ 리워드 도감 */}
-          <h3 className="sec-title">⑤ 리워드 도감</h3>
+            </>
+          ) : adminTab === 'rewards' ? (
+            <>
+          {/* 리워드 도감 */}
+          <h3 className="sec-title">리워드 도감</h3>
           <div className="op-row" style={{ marginBottom: 6 }}>
             <input
               placeholder="상품명"
@@ -1007,8 +1060,25 @@ export default function AdminPage({ onClose }: Props) {
               </div>
             ))}
           </div>
-        </>
-      )}
+            </>
+          ) : (
+            <>
+              <h3 className="sec-title">뽑기 설정</h3>
+              <div className="op-row" style={{ marginBottom: 12 }}>
+                <span className="muted" style={{ fontSize: 13 }}>1회 차감 포인트</span>
+                <input
+                  className="op-score"
+                  type="number"
+                  min={1}
+                  value={gachaCost}
+                  onChange={(e) => setGachaCost(e.target.value)}
+                />
+                <button className="op-btn" disabled={busy} onClick={saveGachaCost}>
+                  저장
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
       </div>
