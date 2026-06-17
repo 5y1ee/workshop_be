@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.game_round import GameRound, RoundSubmission, TapLog
 from app.models.game_session import GameChatLog, GameSession
+from app.models.game import Game
 from app.models.team import Team
 from app.models.team_member import TeamMembership
 from app.models.timetable import Timetable
@@ -84,6 +85,34 @@ async def get_open_round(db: AsyncSession, session_id: int) -> GameRound | None:
     return result.scalar_one_or_none()
 
 
+async def round_input_types(
+    db: AsyncSession, rounds: list[GameRound]
+) -> dict[int, str]:
+    """라운드별 game.input_type 조회."""
+    round_ids = [round_.id for round_ in rounds]
+    if not round_ids:
+        return {}
+    result = await db.execute(
+        select(GameRound.id, Game.input_type)
+        .join(GameSession, GameSession.id == GameRound.session_id)
+        .join(Timetable, Timetable.id == GameSession.timetable_id)
+        .join(Game, Game.id == Timetable.game_id)
+        .where(GameRound.id.in_(round_ids))
+    )
+    return {round_id: input_type for round_id, input_type in result.all()}
+
+
+async def round_input_type(db: AsyncSession, round_: GameRound) -> str | None:
+    result = await db.execute(
+        select(Game.input_type)
+        .join(Timetable, Timetable.game_id == Game.id)
+        .join(GameSession, GameSession.timetable_id == Timetable.id)
+        .where(GameSession.id == round_.session_id)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_chat_logs(
     db: AsyncSession, session_id: int, round_id: int | None = None
 ) -> list[dict]:
@@ -126,6 +155,17 @@ async def update_round(
 ) -> GameRound:
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(round_, key, value)
+    round_.updated_by = admin_id
+    round_.updated_at = _utcnow()
+    await db.commit()
+    await db.refresh(round_)
+    return round_
+
+
+async def reveal_hint(
+    db: AsyncSession, round_: GameRound, admin_id: int
+) -> GameRound:
+    round_.hint_revealed = True
     round_.updated_by = admin_id
     round_.updated_at = _utcnow()
     await db.commit()
