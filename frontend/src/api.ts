@@ -273,6 +273,7 @@ export interface TapResult {
   team_name: string | null
   value: number
   rank: number
+  disqualified?: boolean
 }
 
 export interface SpeakingEvent {
@@ -316,6 +317,7 @@ export interface SpeakingResult {
   value: number
   rank: number
   granted: boolean
+  disqualified?: boolean
 }
 
 export interface SpeakingEventResults {
@@ -352,6 +354,36 @@ export interface ChatLog {
   message: string
   is_correct: boolean
   server_time: string
+}
+
+export interface QuizSubmission {
+  user_id: number
+  nickname: string
+  team_id: number | null
+  team_name: string | null
+  answer: string
+  is_correct: boolean
+  server_time: string
+}
+
+export interface QuizCatalogQuestion {
+  category: string
+  prompt: string
+  options: string[]
+  answer: string
+}
+
+export interface QuizCatalog {
+  total: number
+  categories: { name: string; count: number }[]
+  questions: QuizCatalogQuestion[]
+}
+
+export interface QuizSeedResult {
+  seeded: number
+  session_id: number
+  start_order: number
+  removed: number
 }
 
 export interface RouletteSpinResult {
@@ -574,6 +606,25 @@ export const api = {
     const qs = roundId == null ? '' : `?round_id=${roundId}`
     return request<ChatLog[]>(`/api/sessions/${sessionId}/chat-logs${qs}`, token)
   },
+  roundSubmissions: (token: string, roundId: number) =>
+    request<QuizSubmission[]>(`/api/rounds/${roundId}/submissions`, token),
+  quizCatalog: (token: string) =>
+    request<QuizCatalog>(`/api/quiz-catalog`, token),
+  quizSeed: (
+    token: string,
+    body: {
+      season_id: number
+      categories?: string[] | null
+      limit?: number | null
+      shuffle?: boolean
+      create_session?: boolean
+      replace?: boolean
+    },
+  ) =>
+    request<QuizSeedResult>(`/api/quiz-catalog/seed`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   // --- 전역 발언권 이벤트 ---
   currentSpeakingEvent: (token: string, seasonId: number) =>
