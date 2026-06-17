@@ -1106,14 +1106,26 @@ button:disabled {
 }
 .chat-empty { text-align: center; margin: auto; }
 .chat-msg {
-  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 13px;
   padding: 6px 10px; background: #fff; border-radius: 10px;
-  border: 1px solid var(--line); align-self: flex-start; max-width: 90%;
+  border: 1px solid var(--line); align-self: flex-start; max-width: 90%; min-width: 0;
 }
 .chat-msg.mine { align-self: flex-end; background: #eaf1ff; border-color: #cfe0ff; }
 .chat-msg.correct { background: #e3f6e8; border-color: #b6e6c5; }
-.chat-nick { font-weight: 800; color: #55607a; font-size: 12px; }
-.chat-text { word-break: break-word; }
+.chat-nick {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: #55607a;
+  font-size: 12px;
+}
+.chat-text {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .chat-badge { font-size: 11px; font-weight: 800; color: #1f8a44; }
 .chat-input { display: flex; gap: 8px; }
 .chat-input input {
