@@ -36,6 +36,7 @@ class SpeakingResult(BaseModel):
     value: float
     rank: int
     granted: bool = False
+    disqualified: bool = False
 
 
 class SpeakingEventResults(BaseModel):
