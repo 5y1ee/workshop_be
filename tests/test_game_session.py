@@ -73,6 +73,38 @@ async def test_full_lifecycle(client, admin_headers):
     assert res.json()["ended_at"] is not None  # 종료 시각 자동 기록
 
 
+async def test_create_session_broadcasts(client, admin_headers, monkeypatch):
+    from app.api import game_session as game_session_api
+
+    calls: list[dict] = []
+
+    async def fake_broadcast(session) -> None:
+        calls.append(
+            {
+                "session_id": session.id,
+                "timetable_id": session.timetable_id,
+                "state": session.state,
+            }
+        )
+
+    monkeypatch.setattr(game_session_api, "broadcast_session_created", fake_broadcast)
+
+    timetable_id = await _make_timetable_entry(client, admin_headers)
+    res = await client.post(
+        f"/api/timetable/{timetable_id}/session", headers=admin_headers
+    )
+
+    assert res.status_code == 201
+    body = res.json()
+    assert calls == [
+        {
+            "session_id": body["id"],
+            "timetable_id": timetable_id,
+            "state": "idle",
+        }
+    ]
+
+
 async def test_seed_generated_on_in_progress(client, admin_headers):
     """in_progress 진입 시 서버 시드가 생성되어야 한다 (응답엔 미노출, DB 직접 확인)."""
     session_id = await _create_session(client, admin_headers)

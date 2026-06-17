@@ -160,3 +160,26 @@ async def test_chat_broadcast_includes_log_id(monkeypatch):
             },
         )
     ]
+
+
+async def test_session_created_broadcast(monkeypatch):
+    from app.websocket import events
+
+    calls: list[dict] = []
+
+    async def fake_broadcast(message: dict) -> None:
+        calls.append(message)
+
+    monkeypatch.setattr(events.manager, "broadcast", fake_broadcast)
+
+    session = SimpleNamespace(id=11, timetable_id=22, state="idle")
+    await events.broadcast_session_created(session)
+
+    assert calls == [
+        {
+            "type": "session_created",
+            "session_id": 11,
+            "timetable_id": 22,
+            "state": "idle",
+        }
+    ]
