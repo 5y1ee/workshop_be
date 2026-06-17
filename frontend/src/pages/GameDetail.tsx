@@ -68,6 +68,8 @@ export default function GameDetail({
   const [memberships, setMemberships] = useState<SeasonMembership[]>([])
   const [rounds, setRounds] = useState<GameRound[]>([])
   const [teamBuffs, setTeamBuffs] = useState<TeamBuff[]>([])
+  const [allTeamBuffs, setAllTeamBuffs] = useState<TeamBuff[]>([])
+  const [buffPanelOpen, setBuffPanelOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const inputType = game?.input_type ?? ''
@@ -107,7 +109,10 @@ export default function GameDetail({
     api.results(t, sessionId).then(setResults).catch(() => setResults([]))
     api.rounds(t, sessionId).then(setRounds).catch(() => setRounds([]))
     api.myTeamBuffs(t, sessionId).then(setTeamBuffs).catch(() => setTeamBuffs([]))
-  }, [t, sessionId])
+    if (isAdmin) {
+      api.sessionTeamBuffs(t, sessionId).then(setAllTeamBuffs).catch(() => setAllTeamBuffs([]))
+    }
+  }, [t, sessionId, isAdmin])
 
   useEffect(refresh, [refresh])
 
@@ -192,6 +197,59 @@ export default function GameDetail({
         </div>
       ) : (
         <>
+          {/* 내 팀 버프/디버프 — 운영자 포함 전원 동일하게 최상단 노출 */}
+          {teamBuffs.length > 0 && (
+            <section className="op buff-visible-panel">
+              <h3 className="section">적용 중인 버프/디버프</h3>
+              <div className="buff-chip-list">
+                {teamBuffs.map((item) => (
+                  <div key={item.id} className={`buff-chip ${item.buff_type}`}>
+                    <b>{item.buff_name}</b>
+                    <span>{item.buff_description}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 운영자 전용: 팀별 버프/디버프 현황 (접기/펼치기) */}
+          {isAdmin && allTeamBuffs.length > 0 && (
+            <section className="op buff-visible-panel">
+              <button
+                type="button"
+                className="buff-collapse-header"
+                onClick={() => setBuffPanelOpen((v) => !v)}
+              >
+                <span>{buffPanelOpen ? '▼' : '▶'} 팀별 버프/디버프 현황</span>
+                <span className="muted">{allTeamBuffs.length}건</span>
+              </button>
+              {buffPanelOpen && (
+                <div className="buff-team-groups">
+                  {Array.from(
+                    allTeamBuffs.reduce((map, item) => {
+                      const list = map.get(item.team_id) ?? []
+                      list.push(item)
+                      map.set(item.team_id, list)
+                      return map
+                    }, new Map<number, TeamBuff[]>()),
+                  ).map(([teamId, items]) => (
+                    <div key={teamId} className="buff-team-group">
+                      <h4 className="buff-team-name">{items[0].team_name}</h4>
+                      <div className="buff-chip-list">
+                        {items.map((item) => (
+                          <div key={item.id} className={`buff-chip ${item.buff_type}`}>
+                            <b>{item.buff_name}</b>
+                            <span>{item.buff_description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* input_type 별 참가자 진행 화면 */}
           {isChat && (
             <ChatPanel
@@ -277,20 +335,6 @@ export default function GameDetail({
               onStateChange={setState}
               onScored={refresh}
             />
-          )}
-
-          {teamBuffs.length > 0 && (
-            <section className="op buff-visible-panel">
-              <h3 className="section">적용 중인 버프/디버프</h3>
-              <div className="buff-chip-list">
-                {teamBuffs.map((item) => (
-                  <div key={item.id} className={`buff-chip ${item.buff_type}`}>
-                    <b>{item.buff_name}</b>
-                    <span>{item.buff_description}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
           )}
 
           {isAdmin && state && (
