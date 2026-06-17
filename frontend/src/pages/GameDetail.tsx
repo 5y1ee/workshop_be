@@ -128,6 +128,7 @@ export default function GameDetail({
 
     const structural = [
       'round_started',
+      'round_hint_revealed',
       'round_revealed',
       'session_state_changed',
       'score_recorded',
@@ -256,7 +257,7 @@ export default function GameDetail({
               sessionId={sessionId}
               myUserId={user?.user_id ?? -1}
               round={currentRound}
-              showCorrect={isAdmin}
+              isAdmin={isAdmin}
             />
           )}
           {isButton && <ButtonPanel sessionId={sessionId} round={currentRound} />}

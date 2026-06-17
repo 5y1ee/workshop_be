@@ -9,6 +9,7 @@ import DexPage from './pages/DexPage'
 import MiniGamePage from './pages/MiniGamePage'
 import AdminPage from './pages/AdminPage'
 import SpeakingEventOverlay from './components/SpeakingEventOverlay'
+import NoticeBanner from './components/NoticeBanner'
 
 type Tab = 'my' | 'ranking' | 'main' | 'dex' | 'mini'
 
@@ -55,6 +56,7 @@ export default function AppShell() {
       </header>
 
       <main className="shell-main">
+        <NoticeBanner />
         {adminOpen && isAdmin ? (
           <AdminPage onClose={() => setAdminOpen(false)} />
         ) : loading ? (

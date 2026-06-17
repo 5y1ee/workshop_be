@@ -16,16 +16,18 @@ interface Props {
   sessionId: number
   myUserId: number
   round: GameRound | null
-  showCorrect?: boolean
+  isAdmin?: boolean
 }
 
 /** input_type=chat 게임용 실시간 채팅. 현재 열린 라운드 기준으로 정답을 가린다. */
-export default function ChatPanel({ sessionId, myUserId, round, showCorrect = false }: Props) {
+export default function ChatPanel({ sessionId, myUserId, round, isAdmin = false }: Props) {
   const { send, subscribe, connected } = useLive()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [text, setText] = useState('')
   const keyRef = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const skipClickRef = useRef(false)
 
   useEffect(() => {
     return subscribe((e) => {
@@ -54,6 +56,9 @@ export default function ChatPanel({ sessionId, myUserId, round, showCorrect = fa
     if (!msg) return
     if (send({ type: 'chat_message', session_id: sessionId, message: msg })) {
       setText('')
+      requestAnimationFrame(() => {
+        inputRef.current?.focus({ preventScroll: true })
+      })
     }
   }
 
@@ -69,7 +74,14 @@ export default function ChatPanel({ sessionId, myUserId, round, showCorrect = fa
       {round ? (
         <div className="chat-round">
           <strong>문제 {round.order_index}</strong>
-          {round.prompt && <span className="muted"> · {round.prompt}</span>}
+          {round.prompt ? (
+            <span className="muted"> · {round.prompt}</span>
+          ) : (
+            <span className="muted"> · 힌트 대기 중</span>
+          )}
+          {isAdmin && round.prompt && !round.hint_revealed && (
+            <span className="chat-admin-hint">사용자에게 숨김</span>
+          )}
         </div>
       ) : (
         <p className="muted">진행 중인 라운드가 없습니다. 운영자가 문제를 열면 시작됩니다.</p>
@@ -83,12 +95,12 @@ export default function ChatPanel({ sessionId, myUserId, round, showCorrect = fa
             <div
               key={m.key}
               className={`chat-msg${m.userId === myUserId ? ' mine' : ''}${
-                showCorrect && m.isCorrect ? ' correct' : ''
+                m.isCorrect ? ' correct' : ''
               }`}
             >
               <span className="chat-nick">{m.nickname}</span>
               <span className="chat-text">{m.message}</span>
-              {showCorrect && m.isCorrect && <span className="chat-badge">정답</span>}
+              {m.isCorrect && <span className="chat-badge">정답</span>}
             </div>
           ))
         )}
@@ -96,6 +108,7 @@ export default function ChatPanel({ sessionId, myUserId, round, showCorrect = fa
 
       <div className="chat-input">
         <input
+          ref={inputRef}
           value={text}
           placeholder={round ? '정답 입력…' : '문제 대기 중'}
           onChange={(e) => setText(e.target.value)}
@@ -103,7 +116,24 @@ export default function ChatPanel({ sessionId, myUserId, round, showCorrect = fa
             if (e.key === 'Enter') submit()
           }}
         />
-        <button className="op-btn" onClick={submit} disabled={!text.trim()}>
+        <button
+          type="button"
+          className="op-btn"
+          onPointerDown={(e) => e.preventDefault()}
+          onTouchStart={(e) => {
+            e.preventDefault()
+            skipClickRef.current = true
+            submit()
+          }}
+          onClick={() => {
+            if (skipClickRef.current) {
+              skipClickRef.current = false
+              return
+            }
+            submit()
+          }}
+          disabled={!text.trim()}
+        >
           전송
         </button>
       </div>

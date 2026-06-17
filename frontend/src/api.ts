@@ -255,6 +255,7 @@ export interface GameRound {
   prompt: string | null
   media_url: string | null
   options: string[] | null
+  hint_revealed: boolean
   opened_at: string | null
   closed_at: string | null
   tap_mode: TapMode | null
@@ -286,6 +287,20 @@ export interface SpeakingEvent {
   signal_at: string | null
   created_at: string
   updated_at: string | null
+}
+
+export interface Notice {
+  id: number
+  season_id: number
+  message: string
+  expires_at: string
+  created_by: number
+  deleted_at: string | null
+  created_at: string
+}
+
+export interface CurrentNotice {
+  notice: Notice | null
 }
 
 export interface SpeakingResult {
@@ -539,6 +554,8 @@ export const api = {
     request<RoundReveal>(`/api/rounds/${roundId}/close`, token, { method: 'POST' }),
   deleteRound: (token: string, roundId: number) =>
     request<void>(`/api/rounds/${roundId}`, token, { method: 'DELETE' }),
+  revealRoundHint: (token: string, roundId: number) =>
+    request<GameRound>(`/api/rounds/${roundId}/hint/reveal`, token, { method: 'POST' }),
   revealRound: (token: string, roundId: number) =>
     request<RoundReveal>(`/api/rounds/${roundId}/reveal`, token),
   sendTapSignal: (token: string, roundId: number) =>
@@ -579,6 +596,23 @@ export const api = {
     request<{ status: string }>(`/api/speaking-events/${eventId}/dismiss`, token, {
       method: 'POST',
     }),
+
+  // --- 시즌별 실시간 공지 ---
+  currentNotice: (token: string, seasonId: number) =>
+    request<CurrentNotice>(`/api/seasons/${seasonId}/notices/current`, token),
+  notices: (token: string, seasonId: number) =>
+    request<Notice[]>(`/api/seasons/${seasonId}/notices`, token),
+  createNotice: (
+    token: string,
+    seasonId: number,
+    body: { message: string; duration_minutes: number },
+  ) =>
+    request<Notice>(`/api/seasons/${seasonId}/notices`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteNotice: (token: string, noticeId: number) =>
+    request<void>(`/api/notices/${noticeId}`, token, { method: 'DELETE' }),
 
   // --- 운영자(admin) 관리: 시즌 / 팀 / 유저 ---
   createSeason: (token: string, name: string) =>

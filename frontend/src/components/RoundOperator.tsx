@@ -40,6 +40,7 @@ export default function RoundOperator({
   const [targetTime, setTargetTime] = useState('7.5')
 
   const isButton = inputType === 'button' || inputType === 'vote'
+  const isChat = inputType === 'chat'
   const isTap = inputType === 'tap'
   const canOpenRound = sessionState === 'ready' || sessionState === 'in_progress'
 
@@ -94,6 +95,11 @@ export default function RoundOperator({
       await api.deleteRound(token, roundId)
     })
 
+  const revealHint = (roundId: number) =>
+    run(async () => {
+      await api.revealRoundHint(token, roundId)
+    })
+
   return (
     <section className="op">
       <h3 className="section">🎯 라운드 진행 (운영자)</h3>
@@ -108,6 +114,11 @@ export default function RoundOperator({
               <div className="round-item-top">
                 <span className="round-order">#{r.order_index}</span>
                 <span className={`chip status-${r.status}`}>{STATUS_LABEL[r.status]}</span>
+                {isChat && (
+                  <span className={`chip ${r.hint_revealed ? 'status-open' : 'status-waiting'}`}>
+                    {r.hint_revealed ? '힌트 공개' : '힌트 숨김'}
+                  </span>
+                )}
                 {r.status === 'waiting' && (
                   <>
                     <button
@@ -127,13 +138,24 @@ export default function RoundOperator({
                   </>
                 )}
                 {r.status === 'open' && r.tap_mode !== 'count' && (
-                  <button
-                    className="op-btn round-action-btn"
-                    disabled={busy}
-                    onClick={() => run(() => api.closeRound(token, r.id).then(() => {}))}
-                  >
-                    마감
-                  </button>
+                  <>
+                    {isChat && !r.hint_revealed && (
+                      <button
+                        className="op-btn round-action-btn"
+                        disabled={busy}
+                        onClick={() => revealHint(r.id)}
+                      >
+                        힌트 공개
+                      </button>
+                    )}
+                    <button
+                      className="op-btn round-action-btn"
+                      disabled={busy}
+                      onClick={() => run(() => api.closeRound(token, r.id).then(() => {}))}
+                    >
+                      마감
+                    </button>
+                  </>
                 )}
                 {r.status === 'open' && r.tap_mode === 'count' && (
                   <span className="chip status-open">자동마감</span>
