@@ -4,20 +4,27 @@
 #   ./run_dev.sh --install        # 의존성 설치 후 백엔드/프론트 실행.
 #   ./run_dev.sh --backend-only   # 백엔드만 실행.
 #   ./run_dev.sh --frontend-only  # 프론트만 실행.
+#   ./run_dev.sh --reset-seed-operational  # 운영 초기 데이터로 DB 초기화 후 실행.
 #   ./run_dev.sh --backend-port 8001 --frontend-port 5174
-
-# python -m scripts.seed_db reset-seed --yes
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-python}"
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/venv}"
+if [[ -z "${PYTHON_BIN:-}" && -x "$VENV_DIR/bin/python" ]]; then
+  # shellcheck disable=SC1091
+  source "$VENV_DIR/bin/activate"
+  PYTHON_BIN="$VENV_DIR/bin/python"
+else
+  PYTHON_BIN="${PYTHON_BIN:-python}"
+fi
 HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 RUN_BACKEND=1
 RUN_FRONTEND=1
 INSTALL_DEPS=0
+RESET_SEED_OPERATIONAL=0
 
 usage() {
   cat <<'EOF'
@@ -26,6 +33,8 @@ Usage:
 
 Options:
   --install              Install Python and frontend dependencies before running.
+  --reset-seed-operational
+                         Reset DB and insert operational seed data before running.
   --backend-only         Run only the FastAPI backend.
   --frontend-only        Run only the Vite frontend.
   --host HOST            Bind host. Default: 127.0.0.1
@@ -35,6 +44,7 @@ Options:
 
 Environment overrides:
   PYTHON_BIN             Python executable to use. Default: python
+  VENV_DIR               Virtualenv path to activate. Default: ./venv
   VITE_API_BASE          Frontend API base URL. Default: http://HOST:BACKEND_PORT
 EOF
 }
@@ -43,6 +53,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --install)
       INSTALL_DEPS=1
+      shift
+      ;;
+    --reset-seed-operational)
+      RESET_SEED_OPERATIONAL=1
       shift
       ;;
     --backend-only)
@@ -162,6 +176,17 @@ require_cmd npm
 
 if [[ "$INSTALL_DEPS" -eq 1 ]]; then
   install_deps
+fi
+
+if [[ "$RESET_SEED_OPERATIONAL" -eq 1 ]]; then
+  check_backend_deps
+  DATABASE_URL_NORMALIZED="$(normalized_database_url)"
+  echo "[seed] python -m scripts.seed_db reset-seed-operational --yes"
+  (
+    cd "$ROOT_DIR"
+    DATABASE_URL="$DATABASE_URL_NORMALIZED" \
+      "$PYTHON_BIN" -m scripts.seed_db reset-seed-operational --yes
+  )
 fi
 
 if [[ "$RUN_BACKEND" -eq 1 ]]; then

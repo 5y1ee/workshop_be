@@ -60,18 +60,23 @@ alembic upgrade head
 
 ### 4. 초기 데이터 시드 (선택)
 
-빈 DB 에 데모 데이터(시즌·팀·참가자·게임·세션·리워드)를 한 번에 채운다.
+빈 DB 에 운영 초기 데이터 또는 데모 데이터를 한 번에 채운다.
 **대상은 `.env` 의 `DATABASE_URL`(운영 DB)이며, 파괴적 작업이라 `--yes` 가 필요하다.**
 
 ```bash
-python -m scripts.seed_db reset-seed --yes   # 전체 초기화 후 데모 시드
+python -m scripts.seed_db reset-seed-operational --yes  # 전체 초기화 후 운영 시드
+python -m scripts.seed_db reset-seed --yes              # 전체 초기화 후 데모 시드
+
 # 개별 실행도 가능
-python -m scripts.seed_db reset --yes        # 모든 테이블 drop + create
-python -m scripts.seed_db seed               # 비어있을 때만 데모 데이터 삽입
+python -m scripts.seed_db reset --yes                   # 모든 테이블 drop + create
+python -m scripts.seed_db seed-operational              # 운영 데이터 삽입
+python -m scripts.seed_db seed                          # 데모 데이터 삽입
 ```
 
-시드 결과: 활성 시즌 1 · 팀 3(6명씩) · 참가자 18 · 게임 5 · 타임테이블 5 ·
-세션(종료 2/진행 1/대기 2) · 리워드 6(공개 3/실루엣 3).
+운영 시드 결과: 활성 시즌 1 · 팀 3(6명씩) · 참가자 18 · 게임 9.
+타임테이블·세션·라운드·점수·결과·리워드는 생성하지 않는다.
+
+데모 시드 결과: 운영 시드 데이터에 더해 세션, 라운드, 점수/결과, 리워드 예시를 생성한다.
 로그인 예시 — 관리자 `sangyoon`/`sangyoon1234`, 참가자 `sanghee`/`sanghee1234`
 (비밀번호는 모두 `<아이디>1234`).
 
@@ -96,6 +101,23 @@ npm run dev                # http://localhost:5173
 백엔드가 `:8000` 에 떠 있어야 한다. 로그인 후 하단 5탭(마이/랭킹/메인/도감/미니)으로
 구성된 모바일 화면이 뜬다. 운영자(admin) 계정은 게임 상세에서 운영자 패널
 (상태 전이·점수 입력·룰렛)을 사용할 수 있다.
+
+## 운영 서버 실행(systemd)
+
+운영 서버에서는 systemd 서비스로 백엔드/프론트를 상시 실행한다.
+
+```bash
+sudo bash scripts/install_systemd.sh --reset-seed-operational
+```
+
+`--reset-seed-operational`은 DB를 초기화하므로 최초 운영 데이터 생성 때만 사용한다.
+이후 코드 갱신이나 서비스 재설치 때는 옵션 없이 실행한다.
+
+```bash
+sudo bash scripts/install_systemd.sh
+sudo systemctl status workshop-backend
+sudo systemctl status workshop-frontend
+```
 
 ## 테스트
 
