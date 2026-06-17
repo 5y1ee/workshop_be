@@ -17,7 +17,7 @@ from app.services.score_service import (
     InvalidScoreTarget,
     ScoringNotAllowed,
 )
-from app.websocket.events import broadcast_score_recorded
+from app.websocket.events import broadcast_score_changed, broadcast_score_recorded
 
 router = APIRouter(tags=["scores"])
 
@@ -129,8 +129,10 @@ async def update_score(
             status_code=status.HTTP_404_NOT_FOUND, detail="점수 기록을 찾을 수 없습니다."
         )
     try:
-        return await score_service.update_score(db, score, payload, admin.id)
+        score = await score_service.update_score(db, score, payload, admin.id)
     except ScoringNotAllowed as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
+    await broadcast_score_changed(score, "updated")
+    return score
