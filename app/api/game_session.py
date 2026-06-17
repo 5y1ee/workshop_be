@@ -4,7 +4,7 @@ from app.api.deps import AdminUser, CurrentUser, DbSession
 from app.schemas.game_session import GameSessionRead, SessionTransition
 from app.services import game_session_service, timetable_service
 from app.services.game_session_service import InvalidStateTransition
-from app.websocket.events import broadcast_session_state
+from app.websocket.events import broadcast_session_created, broadcast_session_state
 
 router = APIRouter(tags=["game-sessions"])
 
@@ -31,7 +31,9 @@ async def create_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="타임테이블 항목을 찾을 수 없습니다.",
         )
-    return await game_session_service.create_session(db, timetable_id)
+    session = await game_session_service.create_session(db, timetable_id)
+    await broadcast_session_created(session)
+    return session
 
 
 @router.get(
