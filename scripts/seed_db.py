@@ -28,6 +28,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
 import app.models  # noqa: F401 — Base.metadata 에 전체 테이블 등록
+from app.models.buff import Buff
 from app.models.game import Game
 from app.models.game_round import GameRound
 from app.models.game_session import GameResult, GameScoreLog, GameSession
@@ -67,7 +68,6 @@ REWARDS_OPERATIONAL: list[tuple[str, int]] = [
     ("미니메가폰", 1),
     ("미니게틀링 버블건 핑크", 1),
     ("초소형 칫솔 살균기 화이트", 1),
-    ("종이쇼핑백", 1),
     ("마스크팩 (듀이트리)", 1),
     ("냉각 무선 선풍기", 1),
     ("수딩 미스트 (닥터지)", 1),
@@ -76,6 +76,20 @@ REWARDS_OPERATIONAL: list[tuple[str, int]] = [
     ("치약(센소다인 멀티케어)", 1),
     ("올리브영 기프트카드", 1),
     ("투썸 기프트카드", 5),
+    ("로또복권", 2),
+]
+
+# 운영 버프/디버프 카탈로그 (이름, 구분, 효과 설명, 효과 유형, 지속 시간)
+BUFFS_OPERATIONAL: list[tuple[str, str, str, str, str]] = [
+    ("세종대왕", "debuff", "영어 금지", "action_restrict", "next_game"),
+    ("양손잡이", "debuff", "비주력 손 또는 발만 사용하기", "action_restrict", "next_game"),
+    ("마스크걸", "debuff", "말 금지(손짓 또는 표정만)", "action_restrict", "next_game"),
+    ("아... 뭐더라?", "buff", "힌트권", "reroll", "until_used"),
+    ("안아프네", "buff", "디버프 1회 무효화", "immunity", "until_used"),
+    ("원모타임", "buff", "도전 기회 한 번 더", "reroll", "until_used"),
+    ("다비켜", "buff", "발언 우선권", "first_pick", "until_used"),
+    ("안들리네", "debuff", "귀가 안들리기", "action_restrict", "next_game"),
+    ("안보이네", "debuff", "안대 쓰고 진행", "action_restrict", "next_game"),
 ]
 
 TEAM_NAMES = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀"]
@@ -194,11 +208,23 @@ async def seed(*, include_demo_details: bool = True) -> None:
                         total_count=total,
                     )
                 )
+            for bname, btype, bdesc, beffect, bduration in BUFFS_OPERATIONAL:
+                db.add(
+                    Buff(
+                        name=bname,
+                        description=bdesc,
+                        type=btype,
+                        effect_type=beffect,
+                        duration=bduration,
+                        updated_by=admin.id,
+                    )
+                )
             await db.commit()
             print("✅ 운영 시드 완료")
             print("   - 시즌 '가평 워크샵 2026' (active)")
             print(f"   - 팀 {len(teams)} / 참가자 {len(PARTICIPANTS)} / 게임 {len(games)}")
             print(f"   - 리워드 {len(REWARDS_OPERATIONAL)} (확률 기본값 0.0)")
+            print(f"   - 버프/디버프 {len(BUFFS_OPERATIONAL)}")
             print("   - 타임테이블/세션/라운드/점수/결과 없음")
             print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
             print("   - 참가자 예시: sanghee/sanghee1234")
