@@ -145,6 +145,7 @@ export default function GameDetail({
       'round_revealed',
       'session_state_changed',
       'score_recorded',
+      'score_changed',
       'result_recorded',
       'team_buff_changed',
     ]

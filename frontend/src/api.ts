@@ -303,6 +303,11 @@ export interface CurrentNotice {
   notice: Notice | null
 }
 
+export interface OperationalResetResponse {
+  status: string
+  message: string
+}
+
 export interface SpeakingResult {
   user_id: number
   nickname: string
@@ -405,6 +410,11 @@ export const api = {
       body: new URLSearchParams({ username, password }).toString(),
     }),
   me: (token: string) => request<UserProfile>('/api/auth/me', token),
+  resetOperationalData: (token: string) =>
+    request<OperationalResetResponse>('/api/admin/reset-operational-data', token, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
   seasons: (token: string) => request<Season[]>('/api/seasons', token),
   timetable: (token: string, seasonId: number) =>
     request<TimetableEntry[]>(`/api/seasons/${seasonId}/timetable`, token),

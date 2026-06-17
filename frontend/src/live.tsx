@@ -30,6 +30,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const desc =
       e.type === 'score_recorded'
         ? `점수 기록 (세션 #${sid})`
+        : e.type === 'score_changed'
+          ? `점수 변경 (세션 #${sid})`
         : e.type === 'session_created'
           ? `세션 생성 (타임테이블 #${e.timetable_id})`
         : e.type === 'result_recorded'
@@ -52,6 +54,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                   ? `🎁 ${e.nickname} → ${e.reward_name} 당첨!`
                   : e.type === 'reward_unclaimed'
                   ? `↩️ 리워드 #${e.reward_id} 수령 취소`
+                  : e.type === 'reward_catalog_changed'
+                  ? '🎁 리워드 목록 변경'
+                  : e.type === 'team_membership_changed'
+                  ? '팀 배정 변경'
                   : null
     if (desc) {
       setLog((prev) =>

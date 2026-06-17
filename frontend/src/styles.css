@@ -981,6 +981,32 @@ button:disabled {
   word-break: break-word;
   line-height: 1.35;
 }
+.reset-panel {
+  display: grid;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #f0b8b8;
+  border-radius: 10px;
+  padding: 12px;
+}
+.danger-note {
+  margin: 0;
+  color: #9d1b1b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.reset-confirm {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+}
+.reset-confirm span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.reset-confirm .mini-input {
+  margin-bottom: 0;
+}
 .user-status-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
