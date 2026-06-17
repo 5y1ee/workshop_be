@@ -61,6 +61,8 @@ async def update_season(
 ) -> Season:
     if data.name is not None:
         season.name = data.name
+    if data.gacha_pull_cost is not None:
+        season.gacha_pull_cost = data.gacha_pull_cost
 
     if data.status is not None and data.status != season.status:
         # 상태 전이 시 시작/종료 시각 자동 기록

@@ -88,6 +88,7 @@ async def test_timetable_crud_flow(client, admin_headers):
     assert entry["season_id"] == season_id
     assert entry["game_id"] == game_id
     assert entry["raffle_reward"] == 3
+    assert entry["main_visible"] is True
     entry_id = entry["id"]
 
     # 단건
@@ -96,16 +97,52 @@ async def test_timetable_crud_flow(client, admin_headers):
 
     # 수정
     res = await client.patch(
-        f"/api/timetable/{entry_id}", json={"order_index": 5}, headers=admin_headers
+        f"/api/timetable/{entry_id}",
+        json={"order_index": 5, "main_visible": False},
+        headers=admin_headers,
     )
     assert res.status_code == 200
     assert res.json()["order_index"] == 5
+    assert res.json()["main_visible"] is False
 
     # 삭제
     res = await client.delete(f"/api/timetable/{entry_id}", headers=admin_headers)
     assert res.status_code == 204
     res = await client.get(f"/api/timetable/{entry_id}", headers=admin_headers)
     assert res.status_code == 404
+
+
+async def test_timetable_changes_broadcast(client, admin_headers, monkeypatch):
+    from app.websocket import events as ws_events
+
+    calls = []
+
+    async def fake_broadcast(season_id: int, entry_id: int | None, action: str) -> None:
+        calls.append({"season_id": season_id, "entry_id": entry_id, "action": action})
+
+    monkeypatch.setattr(ws_events, "broadcast_timetable_changed", fake_broadcast)
+
+    season_id = await _create_season(client, admin_headers)
+    game_id = (await _create_game(client, admin_headers)).json()["id"]
+    created = (
+        await client.post(
+            f"/api/seasons/{season_id}/timetable",
+            json={"game_id": game_id, "order_index": 1},
+            headers=admin_headers,
+        )
+    ).json()
+    await client.patch(
+        f"/api/timetable/{created['id']}",
+        json={"main_visible": False},
+        headers=admin_headers,
+    )
+    await client.delete(f"/api/timetable/{created['id']}", headers=admin_headers)
+
+    assert calls == [
+        {"season_id": season_id, "entry_id": created["id"], "action": "created"},
+        {"season_id": season_id, "entry_id": created["id"], "action": "updated"},
+        {"season_id": season_id, "entry_id": created["id"], "action": "deleted"},
+    ]
 
 
 async def test_timetable_delete_reindexes_and_blocks_started_entry(client, admin_headers):

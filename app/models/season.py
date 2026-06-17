@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -29,6 +29,12 @@ class Season(Base, TimestampMixin):
     )
     ended_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, comment="시즌 종료 시각"
+    )
+    gacha_pull_cost: Mapped[int] = mapped_column(
+        Integer,
+        server_default=text("1"),
+        nullable=False,
+        comment="뽑기 1회 차감 포인트",
     )
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", name="fk_seasons_created"),

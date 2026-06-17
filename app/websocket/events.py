@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING
 
 from app.models.game_round import GameRound
 from app.models.game_session import GameChatLog, GameResult, GameScoreLog, GameSession
+from app.models.speaking import SpeakingEvent, SpeakingGrant
 from app.websocket.manager import manager
 
 if TYPE_CHECKING:
     from app.schemas.game_round import TapResult
+    from app.schemas.speaking import SpeakingResult
 
 
 def _iso_utc(dt: datetime | None) -> str | None:
@@ -36,6 +38,46 @@ async def broadcast_session_state(session: GameSession) -> None:
             "session_id": session.id,
             "timetable_id": session.timetable_id,
             "state": session.state,
+        }
+    )
+
+
+async def broadcast_timetable_changed(
+    season_id: int, entry_id: int | None, action: str
+) -> None:
+    """타임테이블 생성/수정/삭제를 전체 접속자에게 브로드캐스트."""
+    await manager.broadcast(
+        {
+            "type": "timetable_changed",
+            "season_id": season_id,
+            "entry_id": entry_id,
+            "action": action,
+        }
+    )
+
+
+async def broadcast_hidden_role_changed(
+    season_id: int | None, user_id: int | None, action: str
+) -> None:
+    await manager.broadcast(
+        {
+            "type": "hidden_role_changed",
+            "season_id": season_id,
+            "user_id": user_id,
+            "action": action,
+        }
+    )
+
+
+async def broadcast_team_buff_changed(
+    session_id: int | None, team_id: int | None, action: str
+) -> None:
+    await manager.broadcast(
+        {
+            "type": "team_buff_changed",
+            "session_id": session_id,
+            "team_id": team_id,
+            "action": action,
         }
     )
 
@@ -228,6 +270,131 @@ async def broadcast_tap_submitted(
             "value": value,
             "tap_mode": tap_mode,
         },
+    )
+
+
+async def broadcast_speaking_event_started(event: SpeakingEvent) -> None:
+    """전역 발언권 이벤트 시작을 전체 접속자에게 알린다."""
+    await manager.broadcast(
+        {
+            "type": "speaking_event_started",
+            "season_id": event.season_id,
+            "event_id": event.id,
+            "mode": event.mode,
+            "status": event.status,
+            "duration": event.duration,
+            "target_time": event.target_time,
+            "opened_at": _iso_utc(event.opened_at),
+        }
+    )
+
+
+async def broadcast_speaking_signal(event: SpeakingEvent) -> None:
+    """발언권 speed 모드 신호를 전체 접속자에게 알린다."""
+    await manager.broadcast(
+        {
+            "type": "speaking_signal",
+            "season_id": event.season_id,
+            "event_id": event.id,
+            "signal_time": _iso_utc(event.signal_at),
+        }
+    )
+
+
+async def broadcast_speaking_event_closed(
+    event: SpeakingEvent, results: list["SpeakingResult"]
+) -> None:
+    """발언권 이벤트 마감 결과를 전체 접속자에게 전송한다."""
+    await manager.broadcast(
+        {
+            "type": "speaking_event_closed",
+            "season_id": event.season_id,
+            "event_id": event.id,
+            "mode": event.mode,
+            "status": event.status,
+            "target_time": event.target_time,
+            "closed_at": _iso_utc(event.closed_at),
+            "results": [
+                {
+                    "user_id": r.user_id,
+                    "nickname": r.nickname,
+                    "team_id": r.team_id,
+                    "team_name": r.team_name,
+                    "value": r.value,
+                    "rank": r.rank,
+                    "granted": r.granted,
+                }
+                for r in results
+            ],
+        }
+    )
+
+
+async def broadcast_speaking_progress(
+    season_id: int, event_id: int, counts: list[dict]
+) -> None:
+    """발언권 count 모드 진행 현황을 운영자에게만 송신."""
+    await manager.broadcast_to_admins(
+        {
+            "type": "speaking_progress",
+            "season_id": season_id,
+            "event_id": event_id,
+            "counts": counts,
+        }
+    )
+
+
+async def broadcast_speaking_submitted(
+    season_id: int,
+    event_id: int,
+    user_id: int,
+    nickname: str,
+    team_name: str | None,
+    value: float,
+    mode: str,
+) -> None:
+    """발언권 speed/timing 제출 도착을 운영자에게만 송신."""
+    await manager.broadcast_to_admins(
+        {
+            "type": "speaking_submitted",
+            "season_id": season_id,
+            "event_id": event_id,
+            "user_id": user_id,
+            "nickname": nickname,
+            "team_name": team_name,
+            "value": value,
+            "mode": mode,
+        }
+    )
+
+
+async def broadcast_speaking_granted(
+    event: SpeakingEvent, grant: SpeakingGrant, result: "SpeakingResult"
+) -> None:
+    """운영자가 특정 참가자에게 발언권을 부여했음을 전파."""
+    await manager.broadcast(
+        {
+            "type": "speaking_granted",
+            "season_id": event.season_id,
+            "event_id": event.id,
+            "grant_id": grant.id,
+            "user_id": grant.user_id,
+            "nickname": result.nickname,
+            "rank": grant.rank,
+            "value": grant.value,
+            "granted_at": _iso_utc(grant.granted_at),
+        }
+    )
+
+
+async def broadcast_speaking_event_dismissed(event: SpeakingEvent) -> None:
+    """운영자가 종료된 발언권 창을 모든 접속자 화면에서 닫도록 알린다."""
+    await manager.broadcast(
+        {
+            "type": "speaking_event_dismissed",
+            "season_id": event.season_id,
+            "event_id": event.id,
+        }
     )
 
 

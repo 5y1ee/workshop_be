@@ -14,6 +14,7 @@ class GachaPullResponse(BaseModel):
     is_win: bool
     reward: RewardRead | None = None
     remaining_point: int
+    pull_cost: int
 
 
 @router.post("/gacha/pull", response_model=GachaPullResponse)
@@ -28,7 +29,7 @@ async def pull_gacha(
     - is_win=false: 꽝 (reward=null)
     """
     try:
-        reward, is_win, remaining_point = await gacha_service.pull(
+        reward, is_win, remaining_point, pull_cost = await gacha_service.pull(
             db, user, season_id
         )
     except ValueError as e:
@@ -49,4 +50,5 @@ async def pull_gacha(
         is_win=is_win,
         reward=RewardRead.model_validate(reward) if reward else None,
         remaining_point=remaining_point,
+        pull_cost=pull_cost,
     )

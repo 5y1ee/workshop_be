@@ -15,10 +15,12 @@ from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
 from app.models.user import User
-from app.services import game_round_service
+from app.services import game_round_service, speaking_service
 from app.services.game_round_service import RoundConflict, get_tap_results
+from app.services.speaking_service import SpeakingConflict
 from app.websocket.events import (
     broadcast_chat_message,
+    broadcast_speaking_submitted,
     broadcast_submission_progress,
     broadcast_tap_closed,
     broadcast_tap_submitted,
@@ -203,3 +205,45 @@ async def _handle_tap_press(ctx: MessageContext, data: dict[str, Any]) -> None:
             )
 
     await ctx.websocket.send_json({"type": "tap_accepted", "round_id": round_id})
+
+
+@register("speaking_press")
+async def _handle_speaking_press(ctx: MessageContext, data: dict[str, Any]) -> None:
+    """전역 발언권 이벤트 버튼 입력."""
+    event_id = data.get("event_id")
+    value = data.get("value")
+    if not isinstance(event_id, int):
+        await _error(ctx, "event_id(정수)가 필요합니다.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        event = await speaking_service.get_event(db, event_id)
+        if event is None:
+            await _error(ctx, "발언권 이벤트를 찾을 수 없습니다.")
+            return
+
+        try:
+            if event.mode == "count":
+                await speaking_service.record_count(db, event, ctx.user_id)
+            else:
+                if not isinstance(value, (int, float)):
+                    await _error(ctx, "value(숫자)가 필요합니다.")
+                    return
+                await speaking_service.record_once(db, event, ctx.user_id, float(value))
+        except SpeakingConflict as exc:
+            await _error(ctx, str(exc))
+            return
+
+        if event.mode in ("speed", "timing"):
+            who = await speaking_service.user_info_for_event(db, event, ctx.user_id)
+            await broadcast_speaking_submitted(
+                season_id=event.season_id,
+                event_id=event.id,
+                user_id=ctx.user_id,
+                nickname=who["nickname"],
+                team_name=who["team_name"],
+                value=float(value),
+                mode=event.mode,
+            )
+
+    await ctx.websocket.send_json({"type": "speaking_accepted", "event_id": event_id})

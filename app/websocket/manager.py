@@ -76,6 +76,11 @@ class ConnectionManager:
             if user_id in self._admin_users:
                 await self.send_to_user(user_id, message)
 
+    async def broadcast_to_admins(self, message: dict[str, Any]) -> None:
+        """현재 접속 중인 모든 운영자에게 송신."""
+        for user_id in list(self._admin_users):
+            await self.send_to_user(user_id, message)
+
     async def broadcast(self, message: dict[str, Any]) -> None:
         for user_id in list(self._user_connections.keys()):
             await self.send_to_user(user_id, message)

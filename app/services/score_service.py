@@ -85,11 +85,24 @@ async def subject_exists(db: AsyncSession, subject_type: str, subject_id: int) -
     return result.scalar_one_or_none() is not None
 
 
+def _effective_participant_type(score_mode: str | None, participant_type: str) -> str:
+    """타임테이블의 score_mode 오버라이드를 반영한 집계 단위.
+
+    score_mode='team' → 팀 집계(team_vs와 동일), 'individual' → 개인 집계.
+    NULL이면 게임의 participant_type을 그대로 쓴다.
+    """
+    if score_mode == "team":
+        return "team_vs"
+    if score_mode == "individual":
+        return "individual"
+    return participant_type
+
+
 async def _session_game_context(
     db: AsyncSession, session_id: int
 ) -> tuple[str, int] | None:
     result = await db.execute(
-        select(Game.participant_type, Timetable.season_id)
+        select(Game.participant_type, Timetable.season_id, Timetable.score_mode)
         .join(Timetable, Timetable.game_id == Game.id)
         .join(GameSession, GameSession.timetable_id == Timetable.id)
         .where(GameSession.id == session_id)
@@ -97,7 +110,10 @@ async def _session_game_context(
     row = result.one_or_none()
     if row is None:
         return None
-    return row.participant_type, row.season_id
+    return (
+        _effective_participant_type(row.score_mode, row.participant_type),
+        row.season_id,
+    )
 
 
 async def _validate_score_target(
@@ -169,12 +185,38 @@ async def create_score(
 
 
 async def list_scores(db: AsyncSession, session_id: int) -> list[GameScoreLog]:
+    team_name = (
+        select(Team.name)
+        .where(Team.id == GameScoreLog.subject_id)
+        .scalar_subquery()
+    )
+    user_name = (
+        select(User.nickname)
+        .where(User.id == GameScoreLog.subject_id)
+        .scalar_subquery()
+    )
+    subject_name = case(
+        (GameScoreLog.subject_type == "team", team_name),
+        else_=user_name,
+    )
     result = await db.execute(
-        select(GameScoreLog)
+        select(
+            GameScoreLog.id,
+            GameScoreLog.session_id,
+            GameScoreLog.subject_type,
+            GameScoreLog.subject_id,
+            subject_name.label("subject_name"),
+            GameScoreLog.chat_log_id,
+            GameScoreLog.score,
+            GameScoreLog.memo,
+            GameScoreLog.created_by,
+            GameScoreLog.created_at,
+            GameScoreLog.updated_at,
+        )
         .where(GameScoreLog.session_id == session_id)
         .order_by(GameScoreLog.id)
     )
-    return list(result.scalars().all())
+    return [dict(row._mapping) for row in result.all()]
 
 
 async def get_score(db: AsyncSession, score_id: int) -> GameScoreLog | None:
@@ -280,11 +322,16 @@ async def season_scoreboard(db: AsyncSession, season_id: int) -> list[dict]:
     팀 총점 = team 직접 점수 + 팀 대항전(team_vs/representative) 세션에서 개인이
     얻은 점수를 그 유저의 시즌 팀으로 귀속한 합. 개인전 점수는 팀에 합산하지 않는다.
     """
-    # 시즌 세션과 게임 유형을 한 번에 묶는다.
+    # 시즌 세션과 게임 유형(타임테이블 score_mode 오버라이드 반영)을 한 번에 묶는다.
+    effective_type = case(
+        (Timetable.score_mode == "team", "team_vs"),
+        (Timetable.score_mode == "individual", "individual"),
+        else_=Game.participant_type,
+    )
     season_sessions = (
         select(
             GameSession.id.label("session_id"),
-            Game.participant_type.label("participant_type"),
+            effective_type.label("participant_type"),
         )
         .join(Timetable, GameSession.timetable_id == Timetable.id)
         .join(Game, Timetable.game_id == Game.id)
@@ -375,6 +422,65 @@ async def season_user_scoreboard(db: AsyncSession, season_id: int) -> list[dict]
             "user_id": row.id,
             "name": row.nickname,
             "total_score": int(row.total_score),
+        }
+        for row in result.all()
+    ]
+
+
+async def season_user_status(db: AsyncSession, season_id: int) -> list[dict]:
+    """운영자용 전체 사용자 현황.
+
+    cumulative_score 는 시즌 점수 로그 합계이고, point 는 뽑기 사용 후 남은 현재 포인트다.
+    """
+    season_session_ids = (
+        select(GameSession.id)
+        .join(Timetable, GameSession.timetable_id == Timetable.id)
+        .where(Timetable.season_id == season_id)
+        .scalar_subquery()
+    )
+    cumulative = (
+        select(
+            GameScoreLog.subject_id.label("user_id"),
+            func.coalesce(func.sum(GameScoreLog.score), 0).label("cumulative_score"),
+        )
+        .where(
+            GameScoreLog.subject_type == "user",
+            GameScoreLog.session_id.in_(season_session_ids),
+        )
+        .group_by(GameScoreLog.subject_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(
+            User.id.label("user_id"),
+            User.nickname,
+            User.role,
+            Team.id.label("team_id"),
+            Team.name.label("team_name"),
+            func.coalesce(cumulative.c.cumulative_score, 0).label("cumulative_score"),
+            User.point,
+        )
+        .select_from(User)
+        .outerjoin(
+            TeamMembership,
+            and_(
+                TeamMembership.user_id == User.id,
+                TeamMembership.season_id == season_id,
+            ),
+        )
+        .outerjoin(Team, Team.id == TeamMembership.team_id)
+        .outerjoin(cumulative, cumulative.c.user_id == User.id)
+        .order_by(User.role, User.id)
+    )
+    return [
+        {
+            "user_id": row.user_id,
+            "nickname": row.nickname,
+            "role": row.role,
+            "team_id": row.team_id,
+            "team_name": row.team_name,
+            "cumulative_score": int(row.cumulative_score),
+            "point": int(row.point),
         }
         for row in result.all()
     ]

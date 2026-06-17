@@ -4,9 +4,11 @@
 """
 
 import uuid
+from datetime import datetime, timezone
 
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal
+from app.models.game_round import RoundSubmission
 from app.models.user import User
 from app.services import game_round_service
 from app.services.game_round_service import RoundConflict
@@ -179,6 +181,61 @@ async def test_submit_on_unopened_round_conflicts(client, admin_headers):
             raise AssertionError("waiting 라운드 제출이 막히지 않았습니다.")
         except RoundConflict:
             pass
+
+
+async def test_delete_waiting_round_reindexes(client, admin_headers):
+    session_id = await _button_session(client, admin_headers)
+    r1 = (await _create_round(client, admin_headers, session_id, order_index=1)).json()
+    r2 = (await _create_round(client, admin_headers, session_id, order_index=2)).json()
+    r3 = (await _create_round(client, admin_headers, session_id, order_index=3)).json()
+
+    res = await client.delete(f"/api/rounds/{r2['id']}", headers=admin_headers)
+    assert res.status_code == 204
+
+    rows = (
+        await client.get(f"/api/sessions/{session_id}/rounds", headers=admin_headers)
+    ).json()
+    assert [row["id"] for row in rows] == [r1["id"], r3["id"]]
+    assert [row["order_index"] for row in rows] == [1, 2]
+
+
+async def test_delete_round_blocks_open_or_recorded_round(client, admin_headers):
+    session_id = await _button_session(client, admin_headers)
+    open_round = (
+        await _create_round(client, admin_headers, session_id, order_index=1)
+    ).json()
+    recorded_round = (
+        await _create_round(client, admin_headers, session_id, order_index=2)
+    ).json()
+
+    await _ready_session(client, admin_headers, session_id)
+    await client.post(f"/api/rounds/{open_round['id']}/open", headers=admin_headers)
+    res = await client.delete(f"/api/rounds/{open_round['id']}", headers=admin_headers)
+    assert res.status_code == 409
+
+    uid = await _make_user()
+    async with AsyncSessionLocal() as db:
+        db.add(
+            RoundSubmission(
+                round_id=recorded_round["id"],
+                user_id=uid,
+                answer="서울",
+                is_correct=False,
+                server_time=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+        )
+        await db.commit()
+
+    res = await client.delete(f"/api/rounds/{recorded_round['id']}", headers=admin_headers)
+    assert res.status_code == 409
+
+
+async def test_delete_round_requires_admin(client, admin_headers, user_headers):
+    session_id = await _button_session(client, admin_headers)
+    round_ = (await _create_round(client, admin_headers, session_id)).json()
+
+    res = await client.delete(f"/api/rounds/{round_['id']}", headers=user_headers)
+    assert res.status_code == 403
 
 
 async def test_record_chat_judges_against_open_round(client, admin_headers):

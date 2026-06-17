@@ -7,15 +7,18 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import (
     auth,
+    buff,
     gacha,
     game,
     game_round,
     game_session,
+    hidden_role,
     result,
     reward,
     roulette,
     score,
     season,
+    speaking,
     team,
     timetable,
     user,
@@ -55,11 +58,14 @@ def create_app() -> FastAPI:
     app.include_router(timetable.router, prefix="/api")
     app.include_router(game_session.router, prefix="/api")
     app.include_router(game_round.router, prefix="/api")
+    app.include_router(hidden_role.router, prefix="/api")
+    app.include_router(buff.router, prefix="/api")
     app.include_router(score.router, prefix="/api")
     app.include_router(result.router, prefix="/api")
     app.include_router(reward.router, prefix="/api")
     app.include_router(gacha.router, prefix="/api")
     app.include_router(roulette.router, prefix="/api")
+    app.include_router(speaking.router, prefix="/api")
 
     # WebSocket
     app.include_router(ws_endpoint.router)

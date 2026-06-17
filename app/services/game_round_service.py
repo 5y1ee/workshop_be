@@ -133,6 +133,42 @@ async def update_round(
     return round_
 
 
+class RoundDeleteBlocked(Exception):
+    """진행 이력이 있는 라운드는 삭제할 수 없음."""
+
+
+async def delete_round(db: AsyncSession, round_: GameRound) -> None:
+    if round_.status != "waiting":
+        raise RoundDeleteBlocked("대기 상태의 라운드만 삭제할 수 있습니다.")
+
+    checks = [
+        select(RoundSubmission.id).where(RoundSubmission.round_id == round_.id).limit(1),
+        select(TapLog.id).where(TapLog.round_id == round_.id).limit(1),
+        select(GameChatLog.id).where(GameChatLog.round_id == round_.id).limit(1),
+    ]
+    for stmt in checks:
+        if await db.scalar(stmt) is not None:
+            raise RoundDeleteBlocked("제출 또는 채팅 기록이 있는 라운드는 삭제할 수 없습니다.")
+
+    session_id = round_.session_id
+    await db.delete(round_)
+    await db.flush()
+
+    result = await db.execute(
+        select(GameRound)
+        .where(GameRound.session_id == session_id)
+        .order_by(GameRound.order_index, GameRound.id)
+    )
+    remaining = list(result.scalars().all())
+    for idx, item in enumerate(remaining, start=1):
+        item.order_index = -idx
+    await db.flush()
+    for idx, item in enumerate(remaining, start=1):
+        item.order_index = idx
+
+    await db.commit()
+
+
 # --- 상태 전이 ---------------------------------------------------------------
 
 

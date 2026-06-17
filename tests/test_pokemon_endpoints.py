@@ -48,6 +48,27 @@ async def _create_user(client, admin_headers, nickname="참가자"):
     ).json()["id"]
 
 
+async def _create_login_user(client, admin_headers, nickname="참가자"):
+    username = _unique("p")
+    password = "pw12345678"
+    user_id = (
+        await client.post(
+            "/api/users",
+            json={
+                "username": username,
+                "password": password,
+                "nickname": nickname,
+                "role": "user",
+            },
+            headers=admin_headers,
+        )
+    ).json()["id"]
+    login = await client.post(
+        "/api/auth/login", data={"username": username, "password": password}
+    )
+    return user_id, {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 async def _session_for_season(
     client, admin_headers, season_id, participant_type="team_vs", order_index=1
 ):
@@ -152,6 +173,79 @@ async def test_season_user_scoreboard_aggregates_and_sorts(client, admin_headers
     board = res.json()
     assert board[0] == {"user_id": user_a, "name": "개인A", "total_score": 15}
     assert board[1] == {"user_id": user_b, "name": "개인B", "total_score": 0}
+
+
+async def test_gacha_cost_spends_user_point_without_changing_cumulative_score(
+    client, admin_headers
+):
+    season_id, red_id, _ = await _season_with_two_teams(client, admin_headers)
+    user_id, auth_headers = await _create_login_user(client, admin_headers, nickname="뽑기러")
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_id},
+        headers=admin_headers,
+    )
+    session_id = await _session_for_season(client, admin_headers, season_id)
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 10},
+        headers=admin_headers,
+    )
+    await client.patch(
+        f"/api/seasons/{season_id}",
+        json={"gacha_pull_cost": 3},
+        headers=admin_headers,
+    )
+
+    res = await client.post(f"/api/gacha/pull?season_id={season_id}", headers=auth_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["pull_cost"] == 3
+    assert body["remaining_point"] == 7
+
+    board = (
+        await client.get(f"/api/seasons/{season_id}/user-scoreboard", headers=admin_headers)
+    ).json()
+    assert next(row for row in board if row["user_id"] == user_id)["total_score"] == 10
+    me = (await client.get("/api/auth/me", headers=auth_headers)).json()
+    assert me["point"] == 7
+
+    await client.patch(
+        f"/api/seasons/{season_id}",
+        json={"gacha_pull_cost": 8},
+        headers=admin_headers,
+    )
+    res = await client.post(f"/api/gacha/pull?season_id={season_id}", headers=auth_headers)
+    assert res.status_code == 402
+
+
+async def test_user_status_includes_admins_users_scores_and_points(client, admin_headers):
+    season_id, red_id, _ = await _season_with_two_teams(client, admin_headers)
+    user_id = await _create_user(client, admin_headers, nickname="현황유저")
+    await client.post(
+        f"/api/seasons/{season_id}/teams/{red_id}/members",
+        json={"user_id": user_id},
+        headers=admin_headers,
+    )
+    session_id = await _session_for_season(client, admin_headers, season_id)
+    await client.post(
+        f"/api/sessions/{session_id}/scores",
+        json={"subject_type": "user", "subject_id": user_id, "score": 6},
+        headers=admin_headers,
+    )
+
+    res = await client.get(f"/api/seasons/{season_id}/user-status", headers=admin_headers)
+    assert res.status_code == 200
+    rows = res.json()
+    assert any(row["role"] == "admin" for row in rows)
+    user_row = next(row for row in rows if row["user_id"] == user_id)
+    assert user_row["team_id"] == red_id
+    assert user_row["team_name"] == "레드팀"
+    assert user_row["cumulative_score"] == 6
+    assert user_row["point"] == 6
+
+    res = await client.get(f"/api/seasons/{season_id}/user-status")
+    assert res.status_code == 401
 
 
 async def test_team_scoreboard_rolls_member_individual_scores(client, admin_headers):
