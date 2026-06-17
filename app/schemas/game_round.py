@@ -40,6 +40,7 @@ class RoundRead(BaseModel):
     prompt: str | None
     media_url: str | None
     options: list[str] | None
+    hint_revealed: bool
     opened_at: datetime | None
     closed_at: datetime | None
     tap_mode: str | None
