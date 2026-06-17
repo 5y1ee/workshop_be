@@ -143,6 +143,14 @@ async def delete_team_buff(team_buff_id: int, db: DbSession, admin: AdminUser) -
     await ws_events.broadcast_team_buff_changed(session_id, team_id, "deleted")
 
 
+@router.get("/sessions/{session_id}/team-buffs", response_model=list[TeamBuffRead])
+async def session_team_buffs(
+    session_id: int, db: DbSession, admin: AdminUser
+) -> list[dict]:
+    """운영자용: 해당 세션 내 모든 팀의 버프/디버프 현황."""
+    return await _team_buff_rows(db, session_id=session_id)
+
+
 @router.get("/sessions/{session_id}/my-team-buffs", response_model=list[TeamBuffRead])
 async def my_team_buffs(session_id: int, db: DbSession, user: CurrentUser) -> list[dict]:
     session = await db.get(GameSession, session_id)
