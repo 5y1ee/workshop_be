@@ -14,6 +14,7 @@ from app.schemas.game_round import (
 from app.services import game_round_service, game_session_service
 from app.services.game_round_service import RoundConflict, RoundDeleteBlocked
 from app.websocket.events import (
+    broadcast_round_hint_revealed,
     broadcast_session_state,
     broadcast_round_revealed,
     broadcast_round_started,
@@ -51,6 +52,13 @@ async def _reveal_for(db: DbSession, round_: GameRound) -> RoundReveal:
     )
 
 
+def _round_read(round_: GameRound, input_type: str | None, is_admin: bool) -> RoundRead:
+    data = RoundRead.model_validate(round_)
+    if input_type == "chat" and not is_admin and not round_.hint_revealed:
+        return data.model_copy(update={"prompt": None})
+    return data
+
+
 @router.post(
     "/sessions/{session_id}/rounds",
     response_model=RoundRead,
@@ -58,22 +66,29 @@ async def _reveal_for(db: DbSession, round_: GameRound) -> RoundReveal:
 )
 async def create_round(
     session_id: int, payload: RoundCreate, db: DbSession, admin: AdminUser
-) -> GameRound:
+) -> RoundRead:
     await _get_session_or_404(db, session_id)
-    return await game_round_service.create_round(db, session_id, payload, admin.id)
+    round_ = await game_round_service.create_round(db, session_id, payload, admin.id)
+    input_type = await game_round_service.round_input_type(db, round_)
+    return _round_read(round_, input_type, is_admin=True)
 
 
 @router.get("/sessions/{session_id}/rounds", response_model=list[RoundRead])
 async def list_rounds(
     session_id: int, db: DbSession, user: CurrentUser
-) -> list[GameRound]:
-    return await game_round_service.list_rounds(db, session_id)
+) -> list[RoundRead]:
+    rounds = await game_round_service.list_rounds(db, session_id)
+    input_types = await game_round_service.round_input_types(db, rounds)
+    return [
+        _round_read(round_, input_types.get(round_.id), is_admin=user.role == "admin")
+        for round_ in rounds
+    ]
 
 
 @router.get("/sessions/{session_id}/rounds/current", response_model=RoundRead)
 async def current_round(
     session_id: int, db: DbSession, user: CurrentUser
-) -> GameRound:
+) -> RoundRead:
     """재접속 시 현재 진행 중인 라운드 복구용."""
     round_ = await game_round_service.get_open_round(db, session_id)
     if round_ is None:
@@ -81,7 +96,8 @@ async def current_round(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="진행 중인 라운드가 없습니다.",
         )
-    return round_
+    input_type = await game_round_service.round_input_type(db, round_)
+    return _round_read(round_, input_type, is_admin=user.role == "admin")
 
 
 @router.get("/sessions/{session_id}/chat-logs", response_model=list[ChatLogRead])
@@ -96,16 +112,20 @@ async def list_chat_logs(
 
 
 @router.get("/rounds/{round_id}", response_model=RoundRead)
-async def get_round(round_id: int, db: DbSession, user: CurrentUser) -> GameRound:
-    return await _get_round_or_404(db, round_id)
+async def get_round(round_id: int, db: DbSession, user: CurrentUser) -> RoundRead:
+    round_ = await _get_round_or_404(db, round_id)
+    input_type = await game_round_service.round_input_type(db, round_)
+    return _round_read(round_, input_type, is_admin=user.role == "admin")
 
 
 @router.patch("/rounds/{round_id}", response_model=RoundRead)
 async def update_round(
     round_id: int, payload: RoundUpdate, db: DbSession, admin: AdminUser
-) -> GameRound:
+) -> RoundRead:
     round_ = await _get_round_or_404(db, round_id)
-    return await game_round_service.update_round(db, round_, payload, admin.id)
+    round_ = await game_round_service.update_round(db, round_, payload, admin.id)
+    input_type = await game_round_service.round_input_type(db, round_)
+    return _round_read(round_, input_type, is_admin=True)
 
 
 @router.delete("/rounds/{round_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -123,7 +143,7 @@ async def delete_round(round_id: int, db: DbSession, admin: AdminUser) -> None:
 @router.post("/rounds/{round_id}/open", response_model=RoundRead)
 async def open_round(
     round_id: int, db: DbSession, admin: AdminUser
-) -> GameRound:
+) -> RoundRead:
     round_ = await _get_round_or_404(db, round_id)
     session = await _get_session_or_404(db, round_.session_id)
     if session.state == "idle":
@@ -147,7 +167,10 @@ async def open_round(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
-    await broadcast_round_started(round_)
+    input_type = await game_round_service.round_input_type(db, round_)
+    await broadcast_round_started(
+        round_, reveal_prompt=input_type != "chat" or round_.hint_revealed
+    )
     # tap count 모드: duration 초 후 자동 마감 + 0.5초 간격 진행 broadcast
     if round_.tap_mode == "count" and round_.duration:
         asyncio.create_task(
@@ -158,7 +181,18 @@ async def open_round(
                 round_.id, round_.session_id, round_.duration
             )
         )
-    return round_
+    return _round_read(round_, input_type, is_admin=True)
+
+
+@router.post("/rounds/{round_id}/hint/reveal", response_model=RoundRead)
+async def reveal_round_hint(
+    round_id: int, db: DbSession, admin: AdminUser
+) -> RoundRead:
+    round_ = await _get_round_or_404(db, round_id)
+    round_ = await game_round_service.reveal_hint(db, round_, admin.id)
+    input_type = await game_round_service.round_input_type(db, round_)
+    await broadcast_round_hint_revealed(round_)
+    return _round_read(round_, input_type, is_admin=True)
 
 
 @router.post("/rounds/{round_id}/close", response_model=RoundReveal)
