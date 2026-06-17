@@ -105,7 +105,10 @@ export default function TapOperatorPanel({
         setResults((e.results as TapResult[]) ?? [])
         setTargetTime((e.target_time as number | null) ?? null)
       }
-      if (e.type === 'score_recorded' && e.session_id === sessionId) {
+      if (
+        (e.type === 'score_recorded' || e.type === 'score_changed') &&
+        e.session_id === sessionId
+      ) {
         api.scores(token, sessionId).then(setScores).catch(() => {})
         onScored()
       }

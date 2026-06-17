@@ -73,7 +73,12 @@ export default function ChatJudgePanel({
 
   useEffect(() => {
     return subscribe((e) => {
-      if (e.type === 'score_recorded' && e.session_id === sessionId) load()
+      if (
+        (e.type === 'score_recorded' || e.type === 'score_changed') &&
+        e.session_id === sessionId
+      ) {
+        load()
+      }
     })
   }, [load, sessionId, subscribe])
 

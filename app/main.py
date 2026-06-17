@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import (
+    admin,
     auth,
     buff,
     gacha,
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
 
     # REST API
     app.include_router(auth.router, prefix="/api")
+    app.include_router(admin.router, prefix="/api")
     app.include_router(season.router, prefix="/api")
     app.include_router(team.router, prefix="/api")
     app.include_router(user.router, prefix="/api")

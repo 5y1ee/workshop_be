@@ -40,7 +40,12 @@ export default function ScoreHistoryPanel({
 
   useEffect(load, [load])
   useEffect(() => {
-    if (lastEvent?.type === 'score_recorded' && lastEvent.session_id === sessionId) load()
+    if (
+      (lastEvent?.type === 'score_recorded' || lastEvent?.type === 'score_changed') &&
+      lastEvent.session_id === sessionId
+    ) {
+      load()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent])
 

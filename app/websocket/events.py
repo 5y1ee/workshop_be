@@ -43,6 +43,18 @@ async def broadcast_session_state(session: GameSession) -> None:
     )
 
 
+async def broadcast_session_created(session: GameSession) -> None:
+    """게임 세션 생성을 전체 접속자에게 브로드캐스트."""
+    await manager.broadcast(
+        {
+            "type": "session_created",
+            "session_id": session.id,
+            "timetable_id": session.timetable_id,
+            "state": session.state,
+        }
+    )
+
+
 async def broadcast_timetable_changed(
     season_id: int, entry_id: int | None, action: str
 ) -> None:
@@ -83,6 +95,33 @@ async def broadcast_team_buff_changed(
     )
 
 
+async def broadcast_team_membership_changed(
+    season_id: int, user_id: int | None, team_id: int | None, action: str
+) -> None:
+    await manager.broadcast(
+        {
+            "type": "team_membership_changed",
+            "season_id": season_id,
+            "user_id": user_id,
+            "team_id": team_id,
+            "action": action,
+        }
+    )
+
+
+async def broadcast_reward_catalog_changed(
+    season_id: int, reward_id: int | None, action: str
+) -> None:
+    await manager.broadcast(
+        {
+            "type": "reward_catalog_changed",
+            "season_id": season_id,
+            "reward_id": reward_id,
+            "action": action,
+        }
+    )
+
+
 async def broadcast_score_recorded(score: GameScoreLog) -> None:
     """점수 기록을 전체 접속자에게 브로드캐스트 (라이브 스코어보드)."""
     await manager.broadcast(
@@ -91,8 +130,23 @@ async def broadcast_score_recorded(score: GameScoreLog) -> None:
             "session_id": score.session_id,
             "subject_type": score.subject_type,
             "subject_id": score.subject_id,
+            "score": score.score,
+        }
+    )
+
+
+async def broadcast_score_changed(score: GameScoreLog, action: str) -> None:
+    """점수 생성/수정을 전체 접속자에게 브로드캐스트."""
+    await manager.broadcast(
+        {
+            "type": "score_changed",
+            "session_id": score.session_id,
+            "score_id": score.id,
+            "subject_type": score.subject_type,
+            "subject_id": score.subject_id,
             "chat_log_id": score.chat_log_id,
             "score": score.score,
+            "action": action,
         }
     )
 

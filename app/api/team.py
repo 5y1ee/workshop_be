@@ -11,6 +11,7 @@ from app.schemas.team import (
     TeamUpdate,
 )
 from app.services import season_service, team_service, user_service
+from app.websocket.events import broadcast_team_membership_changed
 
 router = APIRouter(tags=["teams"])
 
@@ -115,6 +116,7 @@ async def assign_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="유저를 찾을 수 없습니다."
         )
     m = await team_service.assign_member(db, season_id, team_id, payload.user_id)
+    await broadcast_team_membership_changed(season_id, m.user_id, m.team_id, "assigned")
     return SeasonMembership(user_id=m.user_id, team_id=m.team_id)
 
 
@@ -126,6 +128,7 @@ async def unassign_member(
     season_id: int, user_id: int, db: DbSession, admin: AdminUser
 ) -> None:
     await team_service.unassign_member(db, season_id, user_id)
+    await broadcast_team_membership_changed(season_id, user_id, None, "unassigned")
 
 
 @router.get("/seasons/{season_id}/my-team", response_model=MyTeam)

@@ -107,10 +107,12 @@ npm run dev                # http://localhost:5173
 운영 서버에서는 systemd 서비스로 백엔드/프론트를 상시 실행한다.
 
 ```bash
-sudo bash scripts/install_systemd.sh --reset-seed-operational
+sudo bash scripts/install_systemd.sh --stop-existing-ports --reset-seed-operational
 ```
 
 `--reset-seed-operational`은 DB를 초기화하므로 최초 운영 데이터 생성 때만 사용한다.
+`--stop-existing-ports`는 기존에 같은 포트를 잡고 있던 프로세스를 종료하고 새 systemd
+서비스로 전환할 때만 사용한다.
 이후 코드 갱신이나 서비스 재설치 때는 옵션 없이 실행한다.
 
 ```bash

@@ -33,7 +33,7 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
   }
   useEffect(loadProfile, [t])
 
-  useEffect(() => {
+  const loadTeam = () => {
     if (seasonId == null) return
     setTeamId(null)
     setTeamName(null)
@@ -46,7 +46,8 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
       })
       .catch(() => setTeamId(null))
     api.myHiddenRole(t, seasonId).then(setHiddenRole).catch(() => setHiddenRole(null))
-  }, [t, seasonId])
+  }
+  useEffect(loadTeam, [t, seasonId])
 
   useEffect(() => {
     if (teamId == null) return
@@ -60,9 +61,13 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
   }
   useEffect(loadScoreboard, [t, seasonId])
   useEffect(() => {
-    if (lastEvent?.type === 'score_recorded') {
+    if (lastEvent?.type === 'score_recorded' || lastEvent?.type === 'score_changed') {
       loadScoreboard()
       loadProfile()
+    }
+    if (lastEvent?.type === 'team_membership_changed' && lastEvent.season_id === seasonId) {
+      loadTeam()
+      loadScoreboard()
     }
     if (
       lastEvent?.type === 'hidden_role_changed' &&

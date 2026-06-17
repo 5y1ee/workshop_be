@@ -33,6 +33,7 @@ import {
   type UserStatus,
 } from '../api'
 import { useAuth } from '../auth'
+import { useLiveEvent } from '../live'
 import { useSeason } from '../season'
 
 interface Props {
@@ -149,8 +150,10 @@ export default function AdminPage({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [adminTab, setAdminTab] = useState<
-    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs' | 'notices'
+    'season' | 'teams' | 'timetable' | 'rewards' | 'users' | 'hidden' | 'buffs' | 'notices' | 'reset'
   >('teams')
+  const [resetConfirm, setResetConfirm] = useState('')
+  const [resetMessage, setResetMessage] = useState<string | null>(null)
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -182,6 +185,25 @@ export default function AdminPage({ onClose }: Props) {
       setSeasonName('')
       await refreshSeasons()
       setSeasonId(s.id)
+    })
+
+  const resetOperationalData = () =>
+    run(async () => {
+      if (resetConfirm !== '운영 데이터 초기화') {
+        throw new ApiError(400, '확인 문구를 정확히 입력하세요.')
+      }
+      const res = await api.resetOperationalData(t)
+      setResetMessage(res.message)
+      setResetConfirm('')
+      await refreshSeasons()
+      loadUsers()
+      loadGames()
+      loadTeams()
+      loadMemberships()
+      loadEntries()
+      loadRewards()
+      loadNotices()
+      loadUserStatus()
     })
 
   const activateSeason = (id: number) =>
@@ -483,9 +505,10 @@ export default function AdminPage({ onClose }: Props) {
       })
   }, [t, seasonId])
   useEffect(loadEntries, [loadEntries])
-  useEffect(() => {
+  const loadGames = useCallback(() => {
     api.games(t).then(setGames).catch(() => setGames([]))
   }, [t])
+  useEffect(loadGames, [loadGames])
   const sortedEntries = entries.slice().sort((a, b) => a.order_index - b.order_index)
 
   // 같은 게임이 이미 타임테이블에 있으면 "제목 N"을 기본 라벨로 제안 (오프라인 게임 다회 진행용)
@@ -639,6 +662,39 @@ export default function AdminPage({ onClose }: Props) {
   const hiddenRoleOf = (userId: number) =>
     hiddenAssignments.find((a) => a.user_id === userId)?.role_id ?? ''
 
+  useLiveEvent(
+    [
+      'team_membership_changed',
+      'reward_catalog_changed',
+      'reward_claimed',
+      'reward_unclaimed',
+      'score_recorded',
+      'score_changed',
+    ],
+    (e) => {
+      if (seasonId == null) return
+      if (e.type === 'team_membership_changed' && e.season_id === seasonId) {
+        loadMemberships()
+        loadUserStatus()
+        loadTeams()
+      }
+      if (e.type === 'reward_catalog_changed' && e.season_id === seasonId) {
+        loadRewards()
+      }
+      if (e.type === 'reward_claimed' || e.type === 'reward_unclaimed') {
+        loadRewards()
+        if (openClaimsId != null) {
+          api.rewardClaims(t, openClaimsId)
+            .then((claims) => setClaimsMap((prev) => ({ ...prev, [openClaimsId]: claims })))
+            .catch(() => {})
+        }
+      }
+      if (e.type === 'score_recorded' || e.type === 'score_changed') {
+        loadUserStatus()
+      }
+    },
+  )
+
   return (
     <div className="page admin">
       <button className="back" onClick={onClose}>
@@ -697,11 +753,9 @@ export default function AdminPage({ onClose }: Props) {
         ))}
       </div>
 
-      {seasonId == null ? (
-        <p className="muted" style={{ marginTop: 16 }}>시즌을 먼저 선택/생성하세요.</p>
-      ) : (
-        <>
-          <div className="mini-tabs rank-tabs admin-tabs">
+      <div className="mini-tabs rank-tabs admin-tabs">
+        {seasonId != null && (
+          <>
             <button className={adminTab === 'teams' ? 'on' : 'off'} onClick={() => setAdminTab('teams')}>
               팀·유저
             </button>
@@ -726,8 +780,44 @@ export default function AdminPage({ onClose }: Props) {
             <button className={adminTab === 'season' ? 'on' : 'off'} onClick={() => setAdminTab('season')}>
               시즌·뽑기
             </button>
-          </div>
+          </>
+        )}
+        <button className={adminTab === 'reset' ? 'on' : 'off'} onClick={() => setAdminTab('reset')}>
+          데이터 초기화
+        </button>
+      </div>
 
+      {adminTab === 'reset' ? (
+        <>
+          <h3 className="sec-title">데이터 초기화</h3>
+          <div className="reset-panel">
+            <p className="danger-note">
+              현재 DB의 모든 테이블을 초기화한 뒤 운영 데이터를 다시 넣습니다.
+              사용자, 운영자, 팀, 게임 목록만 남고 타임테이블·세션·라운드·점수·공지·리워드는 비워집니다.
+            </p>
+            <label className="reset-confirm">
+              <span>확인 문구</span>
+              <input
+                className="mini-input"
+                value={resetConfirm}
+                onChange={(e) => setResetConfirm(e.target.value)}
+                placeholder="운영 데이터 초기화"
+              />
+            </label>
+            <button
+              className="op-btn danger"
+              disabled={busy || resetConfirm !== '운영 데이터 초기화'}
+              onClick={resetOperationalData}
+            >
+              데이터 초기화 후 운영 데이터 넣기
+            </button>
+            {resetMessage && <p className="muted">{resetMessage}</p>}
+          </div>
+        </>
+      ) : seasonId == null ? (
+        <p className="muted" style={{ marginTop: 16 }}>시즌을 먼저 선택/생성하세요.</p>
+      ) : (
+        <>
           {adminTab === 'notices' ? (
             <>
               <h3 className="sec-title">실시간 공지</h3>

@@ -4,6 +4,7 @@
 #
 # 사용 예:
 #   sudo bash scripts/install_systemd.sh --reset-seed-operational
+#   sudo bash scripts/install_systemd.sh --stop-existing-ports
 #   sudo APP_USER=workshop APP_DIR=/opt/workshop_be bash scripts/install_systemd.sh
 
 set -euo pipefail
@@ -17,6 +18,7 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 RESET_SEED_OPERATIONAL=0
+STOP_EXISTING_PORTS=0
 
 usage() {
   cat <<'EOF'
@@ -25,6 +27,7 @@ Usage:
 
 Options:
   --reset-seed-operational  Reset DB and insert operational seed data once before starting.
+  --stop-existing-ports      Stop existing listeners on backend/frontend ports before starting.
   -h, --help                Show this help.
 
 Environment overrides:
@@ -43,6 +46,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --reset-seed-operational)
       RESET_SEED_OPERATIONAL=1
+      shift
+      ;;
+    --stop-existing-ports)
+      STOP_EXISTING_PORTS=1
       shift
       ;;
     -h|--help)
@@ -77,6 +84,39 @@ fi
 if [[ ! -d "$APP_DIR/frontend/node_modules" ]]; then
   echo "frontend/node_modules가 없습니다. frontend에서 npm install을 먼저 실행하세요." >&2
   exit 1
+fi
+
+stop_existing_port() {
+  local port="$1"
+  local label="$2"
+  local pids
+
+  pids="$(ss -H -ltnp "sport = :$port" 2>/dev/null \
+    | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+    | sort -u \
+    | tr '\n' ' ')"
+
+  if [[ -z "$pids" ]]; then
+    return
+  fi
+
+  echo "[ports] stopping existing $label listener(s) on :$port -> $pids"
+  kill $pids
+  sleep 2
+
+  pids="$(ss -H -ltnp "sport = :$port" 2>/dev/null \
+    | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+    | sort -u \
+    | tr '\n' ' ')"
+  if [[ -n "$pids" ]]; then
+    echo "[ports] force stopping remaining $label listener(s) on :$port -> $pids"
+    kill -9 $pids
+  fi
+}
+
+if [[ "$STOP_EXISTING_PORTS" -eq 1 ]]; then
+  stop_existing_port "$BACKEND_PORT" "backend"
+  stop_existing_port "$FRONTEND_PORT" "frontend"
 fi
 
 echo "[build] frontend"

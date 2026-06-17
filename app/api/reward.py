@@ -42,7 +42,9 @@ async def create_reward(
     season_id: int, payload: RewardCreate, db: DbSession, admin: AdminUser
 ) -> RewardRead:
     await _require_season(db, season_id)
-    return await reward_service.create_reward(db, season_id, payload)
+    reward = await reward_service.create_reward(db, season_id, payload)
+    await ws_events.broadcast_reward_catalog_changed(season_id, reward.id, "created")
+    return reward
 
 
 @router.patch("/rewards/{reward_id}", response_model=RewardRead)
@@ -50,13 +52,17 @@ async def update_reward(
     reward_id: int, payload: RewardUpdate, db: DbSession, admin: AdminUser
 ) -> RewardRead:
     reward = await _get_reward_or_404(db, reward_id)
-    return await reward_service.update_reward(db, reward, payload, admin.id)
+    reward = await reward_service.update_reward(db, reward, payload, admin.id)
+    await ws_events.broadcast_reward_catalog_changed(reward.season_id, reward.id, "updated")
+    return reward
 
 
 @router.delete("/rewards/{reward_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_reward(reward_id: int, db: DbSession, admin: AdminUser) -> None:
     reward = await _get_reward_or_404(db, reward_id)
+    season_id = reward.season_id
     await reward_service.delete_reward(db, reward)
+    await ws_events.broadcast_reward_catalog_changed(season_id, reward_id, "deleted")
 
 
 # --- claim ---

@@ -118,6 +118,19 @@ export default function GameDetail({
 
   // 구조가 바뀌는 이벤트에서만 갱신 (채팅/제출 카운트 같은 고빈도 이벤트는 제외)
   useEffect(() => {
+    if (
+      lastEvent?.type === 'session_created' &&
+      lastEvent.timetable_id === entry.id &&
+      typeof lastEvent.session_id === 'number'
+    ) {
+      setSessionId(lastEvent.session_id)
+      if (typeof lastEvent.state === 'string') {
+        setState(lastEvent.state as GameState)
+      }
+      onSessionChanged()
+      return
+    }
+
     const sid = lastEvent?.session_id as number | undefined
     if (sid !== sessionId || !lastEvent) return
 
@@ -132,13 +145,14 @@ export default function GameDetail({
       'round_revealed',
       'session_state_changed',
       'score_recorded',
+      'score_changed',
       'result_recorded',
       'team_buff_changed',
     ]
     if (structural.includes(lastEvent.type)) {
       refresh()
     }
-  }, [lastEvent, sessionId, refresh])
+  }, [entry.id, lastEvent, sessionId, refresh, onSessionChanged])
 
   // 게임 상세 진입 = 해당 세션 실시간 방에 합류
   useEffect(() => {

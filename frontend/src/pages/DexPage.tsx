@@ -20,7 +20,9 @@ export default function DexPage() {
   useEffect(loadRewards, [t, seasonId])
 
   // 웹소켓 실시간 업데이트 (도감 탭에 머물 때)
-  useLiveEvent(['reward_claimed', 'reward_unclaimed'], loadRewards)
+  useLiveEvent(['reward_claimed', 'reward_unclaimed', 'reward_catalog_changed'], (e) => {
+    if (e.type !== 'reward_catalog_changed' || e.season_id === seasonId) loadRewards()
+  })
 
   const revealedCount = rewards.filter((r) => r.is_revealed).length
 

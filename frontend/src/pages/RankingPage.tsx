@@ -27,7 +27,13 @@ export default function RankingPage() {
   }
   useEffect(load, [t, seasonId])
   useEffect(() => {
-    if (lastEvent?.type === 'score_recorded') load()
+    if (
+      lastEvent?.type === 'score_recorded' ||
+      lastEvent?.type === 'score_changed' ||
+      (lastEvent?.type === 'team_membership_changed' && lastEvent.season_id === seasonId)
+    ) {
+      load()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent])
 
