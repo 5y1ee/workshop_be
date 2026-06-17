@@ -86,6 +86,7 @@ BUFFS_OPERATIONAL: list[tuple[str, str, str, str, str]] = [
     ("마스크걸", "debuff", "말 금지(손짓 또는 표정만)", "action_restrict", "next_game"),
     ("아... 뭐더라?", "buff", "힌트권", "reroll", "until_used"),
     ("안아프네", "buff", "디버프 1회 무효화", "immunity", "until_used"),
+    ("안먹히네", "buff", "상대방이 사용한 디버프 반사", "immunity", "until_used"),
     ("원모타임", "buff", "도전 기회 한 번 더", "reroll", "until_used"),
     ("다비켜", "buff", "발언 우선권", "first_pick", "until_used"),
     ("안들리네", "debuff", "귀가 안들리기", "action_restrict", "next_game"),
