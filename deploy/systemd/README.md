@@ -5,10 +5,12 @@
 ## 최초 설치/갱신
 
 ```bash
-sudo bash scripts/install_systemd.sh --reset-seed-operational
+sudo bash scripts/install_systemd.sh --stop-existing-ports --reset-seed-operational
 ```
 
 `--reset-seed-operational`은 DB를 초기화하므로 최초 운영 데이터 생성 때만 사용한다.
+`--stop-existing-ports`는 기존에 `8000`, `5173` 포트를 잡고 있던 `uvicorn`/`node`
+프로세스를 종료한 뒤 새 systemd 서비스로 띄울 때 사용한다.
 코드만 갱신해서 재배포할 때는 옵션 없이 실행한다.
 
 ```bash
