@@ -86,6 +86,14 @@ export default function RoundOperator({
       onStateChanged(session.state as GameState)
     })
 
+  const deleteRound = (roundId: number, orderIndex: number) =>
+    run(async () => {
+      if (!confirm(`#${orderIndex} 라운드를 삭제할까요? 대기 상태 라운드만 삭제됩니다.`)) {
+        return
+      }
+      await api.deleteRound(token, roundId)
+    })
+
   return (
     <section className="op">
       <h3 className="section">🎯 라운드 진행 (운영자)</h3>
@@ -101,13 +109,22 @@ export default function RoundOperator({
                 <span className="round-order">#{r.order_index}</span>
                 <span className={`chip status-${r.status}`}>{STATUS_LABEL[r.status]}</span>
                 {r.status === 'waiting' && (
-                  <button
-                    className="op-btn round-action-btn"
-                    disabled={busy || !canOpenRound}
-                    onClick={() => openRound(r.id)}
-                  >
-                    오픈
-                  </button>
+                  <>
+                    <button
+                      className="op-btn round-action-btn"
+                      disabled={busy || !canOpenRound}
+                      onClick={() => openRound(r.id)}
+                    >
+                      오픈
+                    </button>
+                    <button
+                      className="op-btn round-action-btn danger"
+                      disabled={busy}
+                      onClick={() => deleteRound(r.id, r.order_index)}
+                    >
+                      삭제
+                    </button>
+                  </>
                 )}
                 {r.status === 'open' && r.tap_mode !== 'count' && (
                   <button

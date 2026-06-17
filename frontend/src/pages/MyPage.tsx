@@ -4,6 +4,7 @@ import {
   resolveAssetUrl,
   type TeamMember,
   type TeamScore,
+  type MyHiddenRole,
   type UserProfile,
   type UserScore,
 } from '../api'
@@ -23,11 +24,14 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [scoreboard, setScoreboard] = useState<TeamScore[]>([])
   const [userScoreboard, setUserScoreboard] = useState<UserScore[]>([])
+  const [hiddenRole, setHiddenRole] = useState<MyHiddenRole | null>(null)
+  const [hiddenRoleOpen, setHiddenRoleOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'stats' | 'party'>('stats')
 
-  useEffect(() => {
+  const loadProfile = () => {
     api.me(t).then(setProfile).catch(() => setProfile(null))
-  }, [t])
+  }
+  useEffect(loadProfile, [t])
 
   useEffect(() => {
     if (seasonId == null) return
@@ -41,6 +45,7 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
         setTeamName(mt.name)
       })
       .catch(() => setTeamId(null))
+    api.myHiddenRole(t, seasonId).then(setHiddenRole).catch(() => setHiddenRole(null))
   }, [t, seasonId])
 
   useEffect(() => {
@@ -55,7 +60,17 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
   }
   useEffect(loadScoreboard, [t, seasonId])
   useEffect(() => {
-    if (lastEvent?.type === 'score_recorded') loadScoreboard()
+    if (lastEvent?.type === 'score_recorded') {
+      loadScoreboard()
+      loadProfile()
+    }
+    if (
+      lastEvent?.type === 'hidden_role_changed' &&
+      seasonId != null &&
+      (lastEvent.season_id == null || lastEvent.season_id === seasonId)
+    ) {
+      api.myHiddenRole(t, seasonId).then(setHiddenRole).catch(() => setHiddenRole(null))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent])
 
@@ -64,8 +79,10 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
   const myUserRankIdx = userScoreboard.findIndex((s) => s.user_id === user?.user_id)
   const myUserScore = myUserRankIdx >= 0 ? userScoreboard[myUserRankIdx].total_score : 0
   const me = members.find((m) => m.id === user?.user_id)
-  const myPoint = me?.point ?? profile?.point ?? 0
-  const myProfileImage = profile?.profile_image ?? me?.profile_image ?? null
+  const myPoint = profile?.point ?? 0
+  const myProfileImage = me?.profile_image ?? profile?.profile_image ?? null
+  const userScoreOf = (userId: number) =>
+    userScoreboard.find((s) => s.user_id === userId)?.total_score ?? 0
 
   const maxTeamScore = Math.max(...scoreboard.map((s) => s.total_score), 1)
   const maxUserScore = Math.max(...userScoreboard.map((s) => s.total_score), 1)
@@ -79,9 +96,11 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
       : myUserRankIdx === 0 ? 100 : 0
   const teamScorePct = Math.min((myTeamScore / maxTeamScore) * 100, 100)
   const userScorePct = Math.min((myUserScore / maxUserScore) * 100, 100)
-  const pointPct = Math.min((myPoint / Math.max(maxUserScore, myPoint, 1)) * 100, 100)
+  const pointPct = userScorePct
 
-  const membersByPoint = [...members].sort((a, b) => (b.point ?? 0) - (a.point ?? 0))
+  const membersByScore = [...members].sort(
+    (a, b) => userScoreOf(b.id) - userScoreOf(a.id) || a.id - b.id,
+  )
   const MEMBER_COLORS = [
     { bg: '#fde7e7', border: '#ee1515' },
     { bg: '#e3f6ec', border: '#2dc35b' },
@@ -89,7 +108,7 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
     { bg: '#fff8e6', border: '#f0c040' },
   ]
   const getMemberColor = (memberId: number) => {
-    const rank = membersByPoint.findIndex((m) => m.id === memberId)
+    const rank = membersByScore.findIndex((m) => m.id === memberId)
     return MEMBER_COLORS[Math.min(rank, MEMBER_COLORS.length - 1)]
   }
 
@@ -151,6 +170,7 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
             {activeTab === 'stats' ? (
               <div className="dex-stats">
                 <DexStat label="내 포인트" value={myPoint} pct={pointPct} colorClass="fill-green" />
+                <DexStat label="개인 누적점수" value={myUserScore} pct={userScorePct} colorClass="fill-teal" />
                 <DexStat
                   label="팀 순위"
                   value={myRankIdx >= 0 ? `${myRankIdx + 1}위` : '—'}
@@ -169,12 +189,23 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
                   pct={userRankPct}
                   colorClass="fill-blue"
                 />
-                <DexStat
-                  label="개인 총점"
-                  value={myUserScore}
-                  pct={userScorePct}
-                  colorClass="fill-green"
-                />
+                {hiddenRole && (
+                  <button
+                    className={`hidden-role-card${hiddenRoleOpen ? ' open' : ''}`}
+                    onClick={() => setHiddenRoleOpen((v) => !v)}
+                  >
+                    <span className="hidden-role-kicker">히든 롤</span>
+                    <strong>{hiddenRoleOpen ? hiddenRole.name : '숨겨진 미션'}</strong>
+                    <span>
+                      {hiddenRoleOpen
+                        ? hiddenRole.description
+                        : '탭해서 내 히든 롤을 확인하세요'}
+                    </span>
+                    {hiddenRoleOpen && (
+                      <em>성공 조건: {hiddenRole.success_condition}</em>
+                    )}
+                  </button>
+                )}
               </div>
             ) : teamId == null ? (
               <p className="muted" style={{ textAlign: 'center', padding: '20px 0' }}>
@@ -186,8 +217,9 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
               </p>
             ) : (
               <div className="dex-party">
-                {members.map((m) => {
+                {membersByScore.map((m) => {
                   const color = getMemberColor(m.id)
+                  const memberScore = userScoreOf(m.id)
                   return (
                     <div
                       key={m.id}
@@ -201,7 +233,7 @@ export default function MyPage({ onBack }: { onBack?: () => void }) {
                         alt={m.nickname}
                       />
                       <div className="dex-member-name">{m.nickname}</div>
-                      <div className="dex-member-pt">{m.point ?? 0}</div>
+                      <div className="dex-member-pt">{memberScore}</div>
                       <span className="dex-member-role">
                         {m.role === 'admin' ? '운영자' : '트레이너'}
                       </span>

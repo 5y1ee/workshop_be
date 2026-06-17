@@ -88,7 +88,7 @@ export default function ScoreHistoryPanel({
             <li key={log.id} className="score-history-row">
               <span className="sh-target">
                 {log.subject_type === 'team' ? '🟦' : '👤'}{' '}
-                {subjectLabel(log.subject_type, log.subject_id)}
+                {log.subject_name ?? subjectLabel(log.subject_type, log.subject_id)}
               </span>
               {editingId === log.id ? (
                 <>

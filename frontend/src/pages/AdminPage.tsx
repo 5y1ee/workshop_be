@@ -18,12 +18,18 @@ import {
   api,
   ApiError,
   type Game,
+  type Buff,
+  type GameSession,
+  type HiddenRole,
+  type HiddenRoleAssignment,
   type Reward,
   type RewardClaimDetail,
   type SeasonMembership,
   type Team,
+  type TeamBuff,
   type TimetableEntry,
   type UserProfile,
+  type UserStatus,
 } from '../api'
 import { useAuth } from '../auth'
 import { useSeason } from '../season'
@@ -43,13 +49,17 @@ function SortableEntryRow({
   id,
   order,
   title,
+  mainVisible,
   busy,
+  onToggleVisible,
   onDelete,
 }: {
   id: number
   order: number
   title: string
+  mainVisible: boolean
   busy: boolean
+  onToggleVisible: (id: number, nextVisible: boolean) => void
   onDelete: (id: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
@@ -72,8 +82,55 @@ function SortableEntryRow({
       <span className="row-main">
         <b>{order}. {title}</b>
       </span>
+      <button
+        className={`mini-btn ${mainVisible ? '' : 'ghost'}`}
+        disabled={busy}
+        onClick={() => onToggleVisible(id, !mainVisible)}
+      >
+        {mainVisible ? '메인 표시' : '메인 숨김'}
+      </button>
       <button className="mini-btn danger" disabled={busy} onClick={() => onDelete(id)}>
         삭제
+      </button>
+    </div>
+  )
+}
+
+function TeamBuffAssignRow({
+  entryId,
+  title,
+  hasSession,
+  teams,
+  buffs,
+  busy,
+  onAssign,
+}: {
+  entryId: number
+  title: string
+  hasSession: boolean
+  teams: Team[]
+  buffs: Buff[]
+  busy: boolean
+  onAssign: (entryId: number, teamId: string, buffId: string) => void
+}) {
+  const [teamId, setTeamId] = useState('')
+  const [buffId, setBuffId] = useState('')
+  return (
+    <div className="admin-row">
+      <span className="row-main">
+        <b>{title}</b>
+        {!hasSession && <span className="muted">세션 필요</span>}
+      </span>
+      <select className="assign" value={teamId} disabled={busy || !hasSession} onChange={(e) => setTeamId(e.target.value)}>
+        <option value="">팀</option>
+        {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+      </select>
+      <select className="assign" value={buffId} disabled={busy || !hasSession} onChange={(e) => setBuffId(e.target.value)}>
+        <option value="">버프/디버프</option>
+        {buffs.map((buff) => <option key={buff.id} value={buff.id}>{buff.name}</option>)}
+      </select>
+      <button className="mini-btn" disabled={busy || !hasSession} onClick={() => onAssign(entryId, teamId, buffId)}>
+        부여
       </button>
     </div>
   )
@@ -83,9 +140,11 @@ export default function AdminPage({ onClose }: Props) {
   const { token } = useAuth()
   const t = token as string
   const { seasons, seasonId, setSeasonId, refresh: refreshSeasons } = useSeason()
+  const selectedSeason = seasons.find((s) => s.id === seasonId) ?? null
 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [adminTab, setAdminTab] = useState<'setup' | 'users' | 'hidden' | 'buffs'>('setup')
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -179,6 +238,25 @@ export default function AdminPage({ onClose }: Props) {
   // ---------- 유저 배치 (멤버십) ----------
   const [users, setUsers] = useState<UserProfile[]>([])
   const [memberships, setMemberships] = useState<SeasonMembership[]>([])
+  const [userStatus, setUserStatus] = useState<UserStatus[]>([])
+  const [gachaCost, setGachaCost] = useState('1')
+  const [hiddenRoles, setHiddenRoles] = useState<HiddenRole[]>([])
+  const [hiddenAssignments, setHiddenAssignments] = useState<HiddenRoleAssignment[]>([])
+  const [newHiddenRole, setNewHiddenRole] = useState({
+    name: '',
+    description: '',
+    success_condition: '',
+  })
+  const [buffs, setBuffs] = useState<Buff[]>([])
+  const [teamBuffs, setTeamBuffs] = useState<TeamBuff[]>([])
+  const [newBuff, setNewBuff] = useState({
+    name: '',
+    description: '',
+    type: 'buff' as 'buff' | 'debuff',
+    effect_type: 'action_restrict',
+    duration: 'next_game',
+  })
+  const [entrySessions, setEntrySessions] = useState<Record<number, GameSession | null>>({})
 
   const loadUsers = useCallback(() => {
     api.users(t).then(setUsers).catch(() => setUsers([]))
@@ -194,6 +272,46 @@ export default function AdminPage({ onClose }: Props) {
   }, [t, seasonId])
   useEffect(loadMemberships, [loadMemberships])
 
+  const loadUserStatus = useCallback(() => {
+    if (seasonId == null) {
+      setUserStatus([])
+      return
+    }
+    api.seasonUserStatus(t, seasonId).then(setUserStatus).catch(() => setUserStatus([]))
+  }, [t, seasonId])
+  useEffect(loadUserStatus, [loadUserStatus])
+  useEffect(() => {
+    setGachaCost(String(selectedSeason?.gacha_pull_cost ?? 1))
+  }, [selectedSeason])
+
+  const loadHiddenRoles = useCallback(() => {
+    api.hiddenRoles(t).then(setHiddenRoles).catch(() => setHiddenRoles([]))
+  }, [t])
+  useEffect(loadHiddenRoles, [loadHiddenRoles])
+
+  const loadHiddenAssignments = useCallback(() => {
+    if (seasonId == null) {
+      setHiddenAssignments([])
+      return
+    }
+    api.hiddenRoleAssignments(t, seasonId).then(setHiddenAssignments).catch(() => setHiddenAssignments([]))
+  }, [t, seasonId])
+  useEffect(loadHiddenAssignments, [loadHiddenAssignments])
+
+  const loadBuffs = useCallback(() => {
+    api.buffs(t).then(setBuffs).catch(() => setBuffs([]))
+  }, [t])
+  useEffect(loadBuffs, [loadBuffs])
+
+  const loadTeamBuffs = useCallback(() => {
+    if (seasonId == null) {
+      setTeamBuffs([])
+      return
+    }
+    api.seasonTeamBuffs(t, seasonId).then(setTeamBuffs).catch(() => setTeamBuffs([]))
+  }, [t, seasonId])
+  useEffect(loadTeamBuffs, [loadTeamBuffs])
+
   const teamOf = (userId: number) =>
     memberships.find((m) => m.user_id === userId)?.team_id ?? null
 
@@ -206,6 +324,7 @@ export default function AdminPage({ onClose }: Props) {
         await api.assignMember(t, seasonId, Number(value), userId)
       }
       loadMemberships()
+      loadUserStatus()
     })
 
   const [nu, setNu] = useState({ username: '', nickname: '', password: '' })
@@ -221,6 +340,73 @@ export default function AdminPage({ onClose }: Props) {
       })
       setNu({ username: '', nickname: '', password: '' })
       loadUsers()
+      loadUserStatus()
+    })
+
+  const saveGachaCost = () =>
+    run(async () => {
+      if (seasonId == null) return
+      const value = Number(gachaCost)
+      if (!Number.isFinite(value) || value < 1) {
+        throw new ApiError(400, '뽑기 차감 포인트는 1 이상이어야 합니다.')
+      }
+      await api.updateSeason(t, seasonId, { gacha_pull_cost: Math.floor(value) })
+      await refreshSeasons()
+    })
+
+  const createHiddenRole = () =>
+    run(async () => {
+      if (!newHiddenRole.name.trim() || !newHiddenRole.description.trim()) {
+        throw new ApiError(400, '히든롤 이름과 설명을 입력하세요.')
+      }
+      await api.createHiddenRole(t, {
+        name: newHiddenRole.name.trim(),
+        description: newHiddenRole.description.trim(),
+        scope: 'global',
+        success_condition: newHiddenRole.success_condition.trim() || '운영자 판정',
+      })
+      setNewHiddenRole({ name: '', description: '', success_condition: '' })
+      loadHiddenRoles()
+    })
+
+  const assignHiddenRole = (userId: number, value: string) =>
+    run(async () => {
+      if (seasonId == null) return
+      if (value === '') {
+        await api.unassignHiddenRole(t, seasonId, userId)
+      } else {
+        await api.assignHiddenRole(t, seasonId, userId, Number(value))
+      }
+      loadHiddenAssignments()
+    })
+
+  const createBuff = () =>
+    run(async () => {
+      if (!newBuff.name.trim() || !newBuff.description.trim()) {
+        throw new ApiError(400, '버프/디버프 이름과 설명을 입력하세요.')
+      }
+      await api.createBuff(t, {
+        ...newBuff,
+        name: newBuff.name.trim(),
+        description: newBuff.description.trim(),
+      })
+      setNewBuff({
+        name: '',
+        description: '',
+        type: 'buff',
+        effect_type: 'action_restrict',
+        duration: 'next_game',
+      })
+      loadBuffs()
+    })
+
+  const assignTeamBuff = (entryId: number, teamId: string, buffId: string) =>
+    run(async () => {
+      const session = entrySessions[entryId]
+      if (!session) throw new ApiError(400, '먼저 해당 게임 세션을 생성하세요.')
+      if (!teamId || !buffId) throw new ApiError(400, '팀과 버프/디버프를 선택하세요.')
+      await api.assignTeamBuff(t, session.id, Number(teamId), Number(buffId))
+      loadTeamBuffs()
     })
 
   // ---------- 타임테이블 ----------
@@ -237,7 +423,21 @@ export default function AdminPage({ onClose }: Props) {
       setEntries([])
       return
     }
-    api.timetable(t, seasonId).then(setEntries).catch(() => setEntries([]))
+    api.timetable(t, seasonId)
+      .then(async (list) => {
+        setEntries(list)
+        const pairs = await Promise.all(
+          list.map(async (entry) => {
+            const sessions = await api.sessions(t, entry.id).catch(() => [])
+            return [entry.id, sessions.length ? sessions[sessions.length - 1] : null] as const
+          }),
+        )
+        setEntrySessions(Object.fromEntries(pairs))
+      })
+      .catch(() => {
+        setEntries([])
+        setEntrySessions({})
+      })
   }, [t, seasonId])
   useEffect(loadEntries, [loadEntries])
   useEffect(() => {
@@ -265,6 +465,17 @@ export default function AdminPage({ onClose }: Props) {
         return
       }
       await api.deleteTimetable(t, id)
+      loadEntries()
+    })
+
+  const toggleEntryVisible = (id: number, nextVisible: boolean) =>
+    run(async () => {
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === id ? { ...entry, main_visible: nextVisible } : entry,
+        ),
+      )
+      await api.updateTimetable(t, id, { main_visible: nextVisible })
       loadEntries()
     })
 
@@ -350,6 +561,8 @@ export default function AdminPage({ onClose }: Props) {
   const gameTitle = (id: number) => games.find((g) => g.id === id)?.title ?? `게임 #${id}`
   const teamName2 = (id: number | null) =>
     id == null ? '미배정' : teams.find((x) => x.id === id)?.name ?? `타 시즌 #${id}`
+  const hiddenRoleOf = (userId: number) =>
+    hiddenAssignments.find((a) => a.user_id === userId)?.role_id ?? ''
 
   return (
     <div className="page admin">
@@ -413,6 +626,151 @@ export default function AdminPage({ onClose }: Props) {
         <p className="muted" style={{ marginTop: 16 }}>시즌을 먼저 선택/생성하세요.</p>
       ) : (
         <>
+          <div className="mini-tabs rank-tabs admin-tabs">
+            <button className={adminTab === 'setup' ? 'on' : 'off'} onClick={() => setAdminTab('setup')}>
+              기본 설정
+            </button>
+            <button className={adminTab === 'users' ? 'on' : 'off'} onClick={() => setAdminTab('users')}>
+              사용자 현황
+            </button>
+            <button className={adminTab === 'hidden' ? 'on' : 'off'} onClick={() => setAdminTab('hidden')}>
+              개인 히든 롤
+            </button>
+            <button className={adminTab === 'buffs' ? 'on' : 'off'} onClick={() => setAdminTab('buffs')}>
+              버프/디버프
+            </button>
+          </div>
+
+          {adminTab === 'users' ? (
+            <>
+              <h3 className="sec-title">사용자 현황</h3>
+              <div className="admin-list">
+                {userStatus.length === 0 ? (
+                  <p className="muted">표시할 사용자가 없습니다.</p>
+                ) : (
+                  userStatus.map((u) => (
+                    <div key={u.user_id} className="admin-row user-status-row">
+                      <span className="row-main">
+                        <b>{u.nickname}</b>
+                        <span className={`chip ${u.role === 'admin' ? 'state' : ''}`}>
+                          {u.role === 'admin' ? '운영자' : '사용자'}
+                        </span>
+                        <span className="muted">{u.team_name ?? '미배정'}</span>
+                      </span>
+                      <span className="status-score">누적 {u.cumulative_score}</span>
+                      <span className="status-point">포인트 {u.point}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          ) : adminTab === 'hidden' ? (
+            <>
+              <h3 className="sec-title">개인 히든 롤</h3>
+              <div className="op-row" style={{ marginBottom: 8 }}>
+                <input placeholder="히든롤 이름" value={newHiddenRole.name} onChange={(e) => setNewHiddenRole({ ...newHiddenRole, name: e.target.value })} />
+                <input placeholder="설명" value={newHiddenRole.description} onChange={(e) => setNewHiddenRole({ ...newHiddenRole, description: e.target.value })} />
+                <input placeholder="성공 조건" value={newHiddenRole.success_condition} onChange={(e) => setNewHiddenRole({ ...newHiddenRole, success_condition: e.target.value })} />
+                <button className="op-btn" disabled={busy} onClick={createHiddenRole}>추가</button>
+              </div>
+              <div className="admin-list" style={{ marginBottom: 10 }}>
+                {hiddenRoles.map((role) => (
+                  <div key={role.id} className="admin-row">
+                    <span className="row-main">
+                      <b>{role.name}</b>
+                      <span className="muted">{role.description}</span>
+                    </span>
+                    <button className="mini-btn danger" disabled={busy} onClick={() => run(async () => { await api.deleteHiddenRole(t, role.id); loadHiddenRoles(); loadHiddenAssignments() })}>삭제</button>
+                  </div>
+                ))}
+              </div>
+              <h3 className="sec-title">팀원별 배정</h3>
+              <div className="admin-list">
+                {users.map((u) => (
+                  <div key={u.id} className="admin-row">
+                    <span className="row-main">
+                      <b>{u.nickname}</b>
+                      <span className="muted">{teamName2(teamOf(u.id))}</span>
+                    </span>
+                    <select className="assign" value={hiddenRoleOf(u.id)} disabled={busy} onChange={(e) => assignHiddenRole(u.id, e.target.value)}>
+                      <option value="">미배정</option>
+                      {hiddenRoles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : adminTab === 'buffs' ? (
+            <>
+              <h3 className="sec-title">버프/디버프 카탈로그</h3>
+              <div className="op-row" style={{ marginBottom: 8 }}>
+                <input placeholder="이름" value={newBuff.name} onChange={(e) => setNewBuff({ ...newBuff, name: e.target.value })} />
+                <input placeholder="설명" value={newBuff.description} onChange={(e) => setNewBuff({ ...newBuff, description: e.target.value })} />
+                <select value={newBuff.type} onChange={(e) => setNewBuff({ ...newBuff, type: e.target.value as 'buff' | 'debuff' })}>
+                  <option value="buff">버프</option>
+                  <option value="debuff">디버프</option>
+                </select>
+                <button className="op-btn" disabled={busy} onClick={createBuff}>추가</button>
+              </div>
+              <div className="admin-list" style={{ marginBottom: 10 }}>
+                {buffs.map((buff) => (
+                  <div key={buff.id} className="admin-row">
+                    <span className="row-main">
+                      <b>{buff.type === 'buff' ? '버프' : '디버프'} · {buff.name}</b>
+                      <span className="muted">{buff.description}</span>
+                    </span>
+                    <button className="mini-btn danger" disabled={busy} onClick={() => run(async () => { await api.deleteBuff(t, buff.id); loadBuffs(); loadTeamBuffs() })}>삭제</button>
+                  </div>
+                ))}
+              </div>
+              <h3 className="sec-title">게임별 팀 부여</h3>
+              <div className="admin-list">
+                {sortedEntries.map((entry) => {
+                  const session = entrySessions[entry.id]
+                  return (
+                    <TeamBuffAssignRow
+                      key={entry.id}
+                      entryId={entry.id}
+                      title={entry.label ?? gameTitle(entry.game_id)}
+                      hasSession={!!session}
+                      teams={teams}
+                      buffs={buffs}
+                      busy={busy}
+                      onAssign={assignTeamBuff}
+                    />
+                  )
+                })}
+              </div>
+              <h3 className="sec-title">부여 현황</h3>
+              <div className="admin-list">
+                {teamBuffs.map((item) => (
+                  <div key={item.id} className="admin-row">
+                    <span className="row-main">
+                      <b>{item.team_name} · {item.buff_name}</b>
+                      <span className="muted">세션 #{item.session_id} · {item.session_state}</span>
+                    </span>
+                    <button className="mini-btn danger" disabled={busy} onClick={() => run(async () => { await api.deleteTeamBuff(t, item.id); loadTeamBuffs() })}>삭제</button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="sec-title">뽑기 설정</h3>
+              <div className="op-row" style={{ marginBottom: 12 }}>
+                <span className="muted" style={{ fontSize: 13 }}>1회 차감 포인트</span>
+                <input
+                  className="op-score"
+                  type="number"
+                  min={1}
+                  value={gachaCost}
+                  onChange={(e) => setGachaCost(e.target.value)}
+                />
+                <button className="op-btn" disabled={busy} onClick={saveGachaCost}>
+                  저장
+                </button>
+              </div>
+
           {/* ② 팀 */}
           <h3 className="sec-title">② 팀 (선택 시즌)</h3>
           <div className="op-row">
@@ -517,7 +875,7 @@ export default function AdminPage({ onClose }: Props) {
           <div className="op-row">
             <select value={pickGame} onChange={(e) => setPickGame(e.target.value)}>
               <option value="">게임 선택</option>
-              {games.map((g) => (
+              {games.filter((g) => g.input_type !== 'tap').map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
                 </option>
@@ -548,7 +906,9 @@ export default function AdminPage({ onClose }: Props) {
                         id={en.id}
                         order={en.order_index}
                         title={en.label ?? gameTitle(en.game_id)}
+                        mainVisible={en.main_visible}
                         busy={busy}
+                        onToggleVisible={toggleEntryVisible}
                         onDelete={deleteEntry}
                       />
                     ))}
@@ -649,6 +1009,8 @@ export default function AdminPage({ onClose }: Props) {
           </div>
         </>
       )}
-    </div>
-  )
-}
+        </>
+      )}
+      </div>
+    )
+  }

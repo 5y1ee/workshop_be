@@ -8,6 +8,7 @@ import MainPage from './pages/MainPage'
 import DexPage from './pages/DexPage'
 import MiniGamePage from './pages/MiniGamePage'
 import AdminPage from './pages/AdminPage'
+import SpeakingEventOverlay from './components/SpeakingEventOverlay'
 
 type Tab = 'my' | 'ranking' | 'main' | 'dex' | 'mini'
 
@@ -92,6 +93,7 @@ export default function AppShell() {
           </button>
         ))}
       </nav>
+      <SpeakingEventOverlay />
     </div>
   )
 }

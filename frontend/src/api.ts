@@ -40,6 +40,7 @@ export interface Season {
   id: number
   name: string
   status: string
+  gacha_pull_cost: number
 }
 
 export interface TimetableEntry {
@@ -50,6 +51,7 @@ export interface TimetableEntry {
   order_index: number
   label: string | null
   raffle_reward: number
+  main_visible: boolean
 }
 
 export interface GameSession {
@@ -78,6 +80,7 @@ export interface ScoreLog {
   session_id: number
   subject_type: string
   subject_id: number
+  subject_name: string | null
   chat_log_id: number | null
   score: number
   memo: string | null
@@ -149,6 +152,79 @@ export interface GachaPullResponse {
   is_win: boolean
   reward: Reward | null
   remaining_point: number
+  pull_cost: number
+}
+
+export interface UserStatus {
+  user_id: number
+  nickname: string
+  role: string
+  team_id: number | null
+  team_name: string | null
+  cumulative_score: number
+  point: number
+}
+
+export interface HiddenRole {
+  id: number
+  name: string
+  description: string
+  scope: string
+  success_condition: string
+  created_at: string
+  updated_at: string | null
+}
+
+export interface HiddenRoleAssignment {
+  id: number
+  season_id: number
+  user_id: number
+  nickname: string
+  team_id: number | null
+  team_name: string | null
+  role_id: number
+  role_name: string
+  role_description: string
+  success_condition: string
+  is_revealed: boolean
+  is_success: boolean | null
+}
+
+export interface MyHiddenRole {
+  id: number
+  role_id: number
+  name: string
+  description: string
+  success_condition: string
+  is_revealed: boolean
+  is_success: boolean | null
+}
+
+export interface Buff {
+  id: number
+  name: string
+  description: string
+  type: 'buff' | 'debuff'
+  effect_type: string
+  duration: string
+  created_at: string
+  updated_at: string | null
+}
+
+export interface TeamBuff {
+  id: number
+  team_id: number
+  team_name: string
+  buff_id: number
+  buff_name: string
+  buff_description: string
+  buff_type: 'buff' | 'debuff'
+  effect_type: string
+  duration: string
+  session_id: number
+  session_state: string
+  is_active: boolean
+  activated_at: string | null
 }
 
 export interface GameResult {
@@ -168,6 +244,7 @@ export interface Game {
 
 export type RoundStatus = 'waiting' | 'open' | 'closed'
 export type TapMode = 'count' | 'speed' | 'timing'
+export type SpeakingMode = TapMode
 
 export interface GameRound {
   id: number
@@ -194,6 +271,46 @@ export interface TapResult {
   team_name: string | null
   value: number
   rank: number
+}
+
+export interface SpeakingEvent {
+  id: number
+  season_id: number
+  mode: SpeakingMode
+  status: 'open' | 'closed'
+  duration: number | null
+  target_time: number | null
+  opened_at: string
+  closed_at: string | null
+  signal_at: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+export interface SpeakingResult {
+  user_id: number
+  nickname: string
+  team_id: number | null
+  team_name: string | null
+  value: number
+  rank: number
+  granted: boolean
+}
+
+export interface SpeakingEventResults {
+  event: SpeakingEvent
+  results: SpeakingResult[]
+}
+
+export interface SpeakingGrant {
+  id: number
+  event_id: number
+  user_id: number
+  rank: number
+  value: number
+  granted_by: number
+  granted_at: string
+  created_at: string
 }
 
 export interface RoundReveal {
@@ -287,12 +404,18 @@ export const api = {
     request<TeamScore[]>(`/api/seasons/${seasonId}/scoreboard`, token),
   seasonUserScoreboard: (token: string, seasonId: number) =>
     request<UserScore[]>(`/api/seasons/${seasonId}/user-scoreboard`, token),
+  seasonUserStatus: (token: string, seasonId: number) =>
+    request<UserStatus[]>(`/api/seasons/${seasonId}/user-status`, token),
   teamMembers: (token: string, teamId: number) =>
     request<TeamMember[]>(`/api/teams/${teamId}/members`, token),
   myTeam: (token: string, seasonId: number) =>
     request<MyTeam>(`/api/seasons/${seasonId}/my-team`, token),
   seasonMembers: (token: string, seasonId: number) =>
     request<SeasonMembership[]>(`/api/seasons/${seasonId}/members`, token),
+  myHiddenRole: (token: string, seasonId: number) =>
+    request<MyHiddenRole>(`/api/seasons/${seasonId}/my-hidden-role`, token),
+  myTeamBuffs: (token: string, sessionId: number) =>
+    request<TeamBuff[]>(`/api/sessions/${sessionId}/my-team-buffs`, token),
   rewards: (token: string, seasonId: number) =>
     request<RewardWithClaims[]>(`/api/seasons/${seasonId}/rewards`, token),
   gachaPull: (token: string, seasonId: number) =>
@@ -320,7 +443,14 @@ export const api = {
   updateTimetable: (
     token: string,
     entryId: number,
-    body: { game_id?: number; order_index?: number; phase?: string | null; label?: string | null; raffle_reward?: number },
+    body: {
+      game_id?: number
+      order_index?: number
+      phase?: string | null
+      label?: string | null
+      raffle_reward?: number
+      main_visible?: boolean
+    },
   ) =>
     request<TimetableEntry>(`/api/timetable/${entryId}`, token, {
       method: 'PATCH',
@@ -398,6 +528,8 @@ export const api = {
     request<GameRound>(`/api/rounds/${roundId}/open`, token, { method: 'POST' }),
   closeRound: (token: string, roundId: number) =>
     request<RoundReveal>(`/api/rounds/${roundId}/close`, token, { method: 'POST' }),
+  deleteRound: (token: string, roundId: number) =>
+    request<void>(`/api/rounds/${roundId}`, token, { method: 'DELETE' }),
   revealRound: (token: string, roundId: number) =>
     request<RoundReveal>(`/api/rounds/${roundId}/reveal`, token),
   sendTapSignal: (token: string, roundId: number) =>
@@ -406,6 +538,38 @@ export const api = {
     const qs = roundId == null ? '' : `?round_id=${roundId}`
     return request<ChatLog[]>(`/api/sessions/${sessionId}/chat-logs${qs}`, token)
   },
+
+  // --- 전역 발언권 이벤트 ---
+  currentSpeakingEvent: (token: string, seasonId: number) =>
+    request<SpeakingEvent>(`/api/seasons/${seasonId}/speaking-events/current`, token),
+  createSpeakingEvent: (
+    token: string,
+    seasonId: number,
+    body: { mode: SpeakingMode; duration?: number | null; target_time?: number | null },
+  ) =>
+    request<SpeakingEvent>(`/api/seasons/${seasonId}/speaking-events`, token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  sendSpeakingSignal: (token: string, eventId: number) =>
+    request<{ status: string }>(`/api/speaking-events/${eventId}/signal`, token, {
+      method: 'POST',
+    }),
+  closeSpeakingEvent: (token: string, eventId: number) =>
+    request<SpeakingEventResults>(`/api/speaking-events/${eventId}/close`, token, {
+      method: 'POST',
+    }),
+  speakingResults: (token: string, eventId: number) =>
+    request<SpeakingResult[]>(`/api/speaking-events/${eventId}/results`, token),
+  grantSpeakingRight: (token: string, eventId: number, userId: number) =>
+    request<SpeakingGrant>(`/api/speaking-events/${eventId}/grants`, token, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
+  dismissSpeakingEvent: (token: string, eventId: number) =>
+    request<{ status: string }>(`/api/speaking-events/${eventId}/dismiss`, token, {
+      method: 'POST',
+    }),
 
   // --- 운영자(admin) 관리: 시즌 / 팀 / 유저 ---
   createSeason: (token: string, name: string) =>
@@ -416,7 +580,7 @@ export const api = {
   updateSeason: (
     token: string,
     seasonId: number,
-    body: { name?: string; status?: 'preparing' | 'active' | 'done' },
+    body: { name?: string; status?: 'preparing' | 'active' | 'done'; gacha_pull_cost?: number },
   ) =>
     request<Season>(`/api/seasons/${seasonId}`, token, {
       method: 'PATCH',
@@ -495,6 +659,47 @@ export const api = {
     request<void>(`/api/rewards/${rewardId}`, token, { method: 'DELETE' }),
   rewardClaims: (token: string, rewardId: number) =>
     request<RewardClaimDetail[]>(`/api/rewards/${rewardId}/claims`, token),
+
+  hiddenRoles: (token: string) => request<HiddenRole[]>('/api/hidden-roles', token),
+  createHiddenRole: (
+    token: string,
+    body: { name: string; description: string; scope: string; success_condition: string },
+  ) =>
+    request<HiddenRole>('/api/hidden-roles', token, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteHiddenRole: (token: string, roleId: number) =>
+    request<void>(`/api/hidden-roles/${roleId}`, token, { method: 'DELETE' }),
+  hiddenRoleAssignments: (token: string, seasonId: number) =>
+    request<HiddenRoleAssignment[]>(`/api/seasons/${seasonId}/hidden-role-assignments`, token),
+  assignHiddenRole: (token: string, seasonId: number, userId: number, roleId: number) =>
+    request<HiddenRoleAssignment>(`/api/seasons/${seasonId}/users/${userId}/hidden-role`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ role_id: roleId }),
+    }),
+  unassignHiddenRole: (token: string, seasonId: number, userId: number) =>
+    request<void>(`/api/seasons/${seasonId}/users/${userId}/hidden-role`, token, {
+      method: 'DELETE',
+    }),
+
+  buffs: (token: string) => request<Buff[]>('/api/buffs', token),
+  createBuff: (
+    token: string,
+    body: { name: string; description: string; type: 'buff' | 'debuff'; effect_type: string; duration: string },
+  ) =>
+    request<Buff>('/api/buffs', token, { method: 'POST', body: JSON.stringify(body) }),
+  deleteBuff: (token: string, buffId: number) =>
+    request<void>(`/api/buffs/${buffId}`, token, { method: 'DELETE' }),
+  seasonTeamBuffs: (token: string, seasonId: number) =>
+    request<TeamBuff[]>(`/api/seasons/${seasonId}/team-buffs`, token),
+  assignTeamBuff: (token: string, sessionId: number, teamId: number, buffId: number) =>
+    request<TeamBuff>(`/api/sessions/${sessionId}/team-buffs`, token, {
+      method: 'POST',
+      body: JSON.stringify({ team_id: teamId, buff_id: buffId }),
+    }),
+  deleteTeamBuff: (token: string, teamBuffId: number) =>
+    request<void>(`/api/team-buffs/${teamBuffId}`, token, { method: 'DELETE' }),
 }
 
 export function wsUrl(token: string): string {

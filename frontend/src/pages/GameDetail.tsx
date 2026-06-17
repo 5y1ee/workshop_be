@@ -8,6 +8,7 @@ import {
   type GameState,
   type ScoreSummaryItem,
   type SeasonMembership,
+  type TeamBuff,
   type Team,
   type TimetableEntry,
   type UserProfile,
@@ -41,6 +42,10 @@ const STATE_LABEL: Record<GameState, string> = {
   done: '종료',
 }
 
+function cleanGameLabel(label: string): string {
+  return label.replace(/^\s*\d+\.\s*/, '')
+}
+
 export default function GameDetail({
   entry,
   session,
@@ -62,6 +67,7 @@ export default function GameDetail({
   const [users, setUsers] = useState<UserProfile[]>([])
   const [memberships, setMemberships] = useState<SeasonMembership[]>([])
   const [rounds, setRounds] = useState<GameRound[]>([])
+  const [teamBuffs, setTeamBuffs] = useState<TeamBuff[]>([])
   const [busy, setBusy] = useState(false)
 
   const inputType = game?.input_type ?? ''
@@ -100,6 +106,7 @@ export default function GameDetail({
     api.scoreSummary(t, sessionId).then(setSummary).catch(() => setSummary([]))
     api.results(t, sessionId).then(setResults).catch(() => setResults([]))
     api.rounds(t, sessionId).then(setRounds).catch(() => setRounds([]))
+    api.myTeamBuffs(t, sessionId).then(setTeamBuffs).catch(() => setTeamBuffs([]))
   }, [t, sessionId])
 
   useEffect(refresh, [refresh])
@@ -120,6 +127,7 @@ export default function GameDetail({
       'session_state_changed',
       'score_recorded',
       'result_recorded',
+      'team_buff_changed',
     ]
     if (structural.includes(lastEvent.type)) {
       refresh()
@@ -154,7 +162,7 @@ export default function GameDetail({
       </button>
 
       <h2 className="detail-title">
-        {entry.order_index}. {entry.label ?? game?.title ?? `게임 #${entry.game_id}`}
+        {cleanGameLabel(entry.label ?? game?.title ?? `게임 #${entry.game_id}`)}
       </h2>
       {game?.description && <p className="muted">{game.description}</p>}
       <div className="detail-meta">
@@ -269,6 +277,20 @@ export default function GameDetail({
               onStateChange={setState}
               onScored={refresh}
             />
+          )}
+
+          {teamBuffs.length > 0 && (
+            <section className="op buff-visible-panel">
+              <h3 className="section">적용 중인 버프/디버프</h3>
+              <div className="buff-chip-list">
+                {teamBuffs.map((item) => (
+                  <div key={item.id} className={`buff-chip ${item.buff_type}`}>
+                    <b>{item.buff_name}</b>
+                    <span>{item.buff_description}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {isAdmin && state && (

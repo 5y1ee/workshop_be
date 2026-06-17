@@ -8,9 +8,10 @@ type Phase = 'idle' | 'pulling' | 'win' | 'blank'
 export default function MiniGamePage() {
   const { token, user } = useAuth()
   const t = token as string
-  const { seasonId } = useSeason()
+  const { seasonId, season } = useSeason()
 
   const [point, setPoint] = useState<number | null>(null)
+  const [pullCost, setPullCost] = useState<number>(season?.gacha_pull_cost ?? 1)
   const [phase, setPhase] = useState<Phase>('idle')
   const [result, setResult] = useState<GachaPullResponse | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -19,6 +20,9 @@ export default function MiniGamePage() {
   useEffect(() => {
     api.me(t).then((p) => setPoint(p.point)).catch(() => setPoint(null))
   }, [t])
+  useEffect(() => {
+    setPullCost(season?.gacha_pull_cost ?? 1)
+  }, [season])
 
   const pull = async () => {
     if (phase === 'pulling' || seasonId == null) return
@@ -31,6 +35,7 @@ export default function MiniGamePage() {
       timerRef.current = setTimeout(() => {
         setResult(res)
         setPoint(res.remaining_point)
+        setPullCost(res.pull_cost)
         setPhase(res.is_win ? 'win' : 'blank')
       }, 1400)
     } catch (e) {
@@ -41,7 +46,7 @@ export default function MiniGamePage() {
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
-  const canPull = phase !== 'pulling' && (point ?? 0) >= 1 && seasonId != null
+  const canPull = phase !== 'pulling' && (point ?? 0) >= pullCost && seasonId != null
 
   return (
     <div className="page">
@@ -128,25 +133,25 @@ export default function MiniGamePage() {
           >
             {phase === 'pulling'
               ? '뽑는 중…'
-              : (point ?? 0) < 1
+              : (point ?? 0) < pullCost
               ? '포인트 부족'
-              : '뽑기! (-1pt)'}
+              : `뽑기! (-${pullCost}pt)`}
           </button>
         )}
 
         {(phase === 'win' || phase === 'blank') && (
           <button
             className="op-btn"
-            disabled={(point ?? 0) < 1}
+            disabled={(point ?? 0) < pullCost}
             onClick={() => { setPhase('idle'); setResult(null); pull() }}
             style={{ marginTop: 8, width: '100%' }}
           >
-            {(point ?? 0) < 1 ? '포인트 부족' : '한 번 더!'}
+            {(point ?? 0) < pullCost ? '포인트 부족' : '한 번 더!'}
           </button>
         )}
       </div>
 
-      <div className="note">⚠️ 뽑기 1회당 1포인트 차감. 당첨 결과는 도감에 반영됩니다.</div>
+      <div className="note">⚠️ 뽑기 1회당 {pullCost}포인트 차감. 당첨 결과는 도감에 반영됩니다.</div>
 
       <style>{`
         .gacha-bag-wrap {
