@@ -60,6 +60,24 @@ PARTICIPANTS: list[tuple[str, str, str, str, int]] = [
     ("장승연", "seungyeon", "에브이", "user", 0),
 ]
 
+# 운영 리워드 도감 (상품명, 수량) — 확률(win_rate)은 기본값 0.0 사용, 운영 중 관리자가 조정
+REWARDS_OPERATIONAL: list[tuple[str, int]] = [
+    ("마우스패드", 2),
+    ("다연발 고무줄 총 민트", 1),
+    ("미니메가폰", 1),
+    ("미니게틀링 버블건 핑크", 1),
+    ("초소형 칫솔 살균기 화이트", 1),
+    ("종이쇼핑백", 1),
+    ("마스크팩 (듀이트리)", 1),
+    ("냉각 무선 선풍기", 1),
+    ("수딩 미스트 (닥터지)", 1),
+    ("마스크팩 (넘버즈인)", 1),
+    ("오쏘뮬 멀티비타민", 1),
+    ("치약(센소다인 멀티케어)", 1),
+    ("올리브영 기프트카드", 1),
+    ("투썸 기프트카드", 5),
+]
+
 TEAM_NAMES = ["🔴 레드팀", "🔵 블루팀", "🟢 그린팀"]
 TEAM_SIZE = 6
 BOOTSTRAP_ADMIN = "sangyoon"
@@ -168,11 +186,20 @@ async def seed(*, include_demo_details: bool = True) -> None:
         await db.flush()
 
         if not include_demo_details:
+            for name, total in REWARDS_OPERATIONAL:
+                db.add(
+                    Reward(
+                        season_id=season.id,
+                        name=name,
+                        total_count=total,
+                    )
+                )
             await db.commit()
             print("✅ 운영 시드 완료")
             print("   - 시즌 '가평 워크샵 2026' (active)")
             print(f"   - 팀 {len(teams)} / 참가자 {len(PARTICIPANTS)} / 게임 {len(games)}")
-            print("   - 타임테이블/세션/라운드/점수/결과/리워드 없음")
+            print(f"   - 리워드 {len(REWARDS_OPERATIONAL)} (확률 기본값 0.0)")
+            print("   - 타임테이블/세션/라운드/점수/결과 없음")
             print("   - 관리자: minji/minji1234, somin/somin1234, sangyoon/sangyoon1234")
             print("   - 참가자 예시: sanghee/sanghee1234")
             return
