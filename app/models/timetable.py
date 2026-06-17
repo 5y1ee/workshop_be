@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, ForeignKey, String, text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -6,6 +6,12 @@ from app.db.base import Base, TimestampMixin
 
 class Timetable(Base, TimestampMixin):
     __tablename__ = "timetable"
+    __table_args__ = (
+        CheckConstraint(
+            "score_mode IN ('team', 'individual')",
+            name="timetable_score_mode_check",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     season_id: Mapped[int] = mapped_column(
@@ -35,6 +41,11 @@ class Timetable(Base, TimestampMixin):
         server_default=text("true"),
         nullable=False,
         comment="메인 화면에서 이미지와 라벨을 강조 노출할지 여부",
+    )
+    score_mode: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="스코어보드 집계 단위 오버라이드 (team/individual). NULL이면 게임의 participant_type 사용",
     )
     updated_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", name="fk_timetable_updated"),
