@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,6 +48,11 @@ class HiddenRole(Base, TimestampMixin):
 
 class UserHiddenRole(Base, TimestampMixin):
     __tablename__ = "user_hidden_roles"
+    __table_args__ = (
+        UniqueConstraint(
+            "season_id", "user_id", name="uq_user_hidden_roles_season_user"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     season_id: Mapped[int] = mapped_column(

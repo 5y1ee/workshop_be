@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String, text
+from sqlalchemy import Boolean, ForeignKey, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -29,6 +29,12 @@ class Timetable(Base, TimestampMixin):
     )
     raffle_reward: Mapped[int] = mapped_column(
         server_default=text("0"), nullable=False, comment="라운드 종료 시 지급할 뽑기권 수"
+    )
+    main_visible: Mapped[bool] = mapped_column(
+        Boolean,
+        server_default=text("true"),
+        nullable=False,
+        comment="메인 화면에서 이미지와 라벨을 강조 노출할지 여부",
     )
     updated_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", name="fk_timetable_updated"),

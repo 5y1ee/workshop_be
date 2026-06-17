@@ -13,6 +13,12 @@ from app.models.raffle import RaffleTicket
 from app.models.reward import Reward
 from app.models.reward_claim import RewardClaim
 from app.models.season import Season
+from app.models.speaking import (
+    SpeakingEvent,
+    SpeakingGrant,
+    SpeakingSubmission,
+    SpeakingTapLog,
+)
 from app.models.team import Team
 from app.models.team_member import TeamMembership
 from app.models.timetable import Timetable
@@ -22,6 +28,10 @@ from app.models.vote import VoteBallot, VoteItem, VoteRecord
 __all__ = [
     "User",
     "Season",
+    "SpeakingEvent",
+    "SpeakingSubmission",
+    "SpeakingTapLog",
+    "SpeakingGrant",
     "Team",
     "TeamMembership",
     "Game",
