@@ -70,6 +70,12 @@ class GameRound(Base, TimestampMixin):
         nullable=True,
         comment="정답 (공개 전 비노출 — 룰렛 seed 처럼 응답에서 숨김)",
     )
+    hint_revealed: Mapped[bool] = mapped_column(
+        Boolean,
+        server_default=text("false"),
+        nullable=False,
+        comment="chat 타입 힌트 공개 여부",
+    )
     opened_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, comment="라운드 오픈 시각"
     )

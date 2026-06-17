@@ -9,6 +9,7 @@ from app.models.game_session import (
     GameSession,
 )
 from app.models.hidden_role import HiddenRole, UserHiddenRole
+from app.models.notice import Notice
 from app.models.raffle import RaffleTicket
 from app.models.reward import Reward
 from app.models.reward_claim import RewardClaim
@@ -51,6 +52,7 @@ __all__ = [
     "RaffleTicket",
     "HiddenRole",
     "UserHiddenRole",
+    "Notice",
     "VoteItem",
     "VoteBallot",
     "VoteRecord",
