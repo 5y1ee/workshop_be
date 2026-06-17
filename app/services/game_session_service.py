@@ -7,10 +7,11 @@
 import secrets
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.game_session import GameSession
+from app.models.buff import TeamBuff
 
 # 허용된 상태 전이 맵 (forward-only)
 TRANSITIONS: dict[str, set[str]] = {
@@ -77,6 +78,15 @@ async def transition(
         if session.seed is None:
             # 룰렛/도박 결과 생성을 위한 서버 시드 (공정성용, 외부 비노출)
             session.seed = secrets.token_hex(16)
+    elif to_state == "ready":
+        await db.execute(
+            update(TeamBuff)
+            .where(
+                TeamBuff.session_id == session.id,
+                TeamBuff.activated_at.is_(None),
+            )
+            .values(activated_at=_utcnow())
+        )
     elif to_state == "done":
         session.ended_at = _utcnow()
 

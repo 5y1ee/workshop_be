@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reward import Reward
 from app.models.reward_claim import RewardClaim
+from app.models.season import Season
 from app.models.user import User
 
 
@@ -28,18 +29,22 @@ async def _remaining_count(db: AsyncSession, reward_id: int) -> int:
 
 async def pull(
     db: AsyncSession, user: User, season_id: int
-) -> tuple[Reward | None, bool, int]:
+) -> tuple[Reward | None, bool, int, int]:
     """뽑기 1회 실행.
 
     Returns:
-        (reward, is_win, remaining_point)
+        (reward, is_win, remaining_point, pull_cost)
         is_win=False 이면 reward=None (꽝)
     """
-    if user.point < 1:
+    season = await db.get(Season, season_id)
+    if season is None:
+        raise ValueError("시즌을 찾을 수 없습니다.")
+    pull_cost = max(int(season.gacha_pull_cost or 1), 1)
+    if user.point < pull_cost:
         raise ValueError("포인트가 부족합니다.")
 
     # 포인트 차감
-    user.point -= 1
+    user.point -= pull_cost
     await db.flush()
 
     # 잔여 수량 있는 리워드 목록
@@ -73,7 +78,7 @@ async def pull(
         # 뽑을 수 있는 리워드 없음 → 꽝 처리 (포인트는 차감)
         await db.commit()
         await db.refresh(user)
-        return None, False, user.point
+        return None, False, user.point, pull_cost
 
     total_win_rate = sum(r.win_rate for r in available)
     rand = random.random()
@@ -82,7 +87,7 @@ async def pull(
         # 꽝
         await db.commit()
         await db.refresh(user)
-        return None, False, user.point
+        return None, False, user.point, pull_cost
 
     # 당첨 — win_rate 비례로 리워드 선택
     pick = random.uniform(0, total_win_rate)
@@ -109,4 +114,4 @@ async def pull(
     await db.commit()
     await db.refresh(user)
     await db.refresh(selected)
-    return selected, True, user.point
+    return selected, True, user.point, pull_cost
