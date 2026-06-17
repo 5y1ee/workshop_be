@@ -87,6 +87,7 @@ export default function MainPage() {
   useEffect(loadEntries, [loadEntries])
   useEffect(() => {
     if (
+      lastEvent?.type === 'session_created' ||
       lastEvent?.type === 'session_state_changed' ||
       (lastEvent?.type === 'timetable_changed' && lastEvent.season_id === seasonId)
     ) {

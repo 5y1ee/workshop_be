@@ -30,6 +30,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const desc =
       e.type === 'score_recorded'
         ? `점수 기록 (세션 #${sid})`
+        : e.type === 'session_created'
+          ? `세션 생성 (타임테이블 #${e.timetable_id})`
         : e.type === 'result_recorded'
           ? `결과 확정 (세션 #${sid})`
           : e.type === 'session_state_changed'
